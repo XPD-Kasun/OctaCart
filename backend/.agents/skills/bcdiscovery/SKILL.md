@@ -135,6 +135,8 @@ Consider following questions ask yourself as a domain expert.
 
 ## Output Templates
 
+Do not use emojies unless required.
+
 ### Bounded Context Canvas (one per context)
 
 ```markdown
