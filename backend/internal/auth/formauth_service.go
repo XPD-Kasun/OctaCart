@@ -10,6 +10,8 @@ import (
 	"context"
 	"octacart/internal/shared"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
 type FormAuthProfile struct {
@@ -24,6 +26,7 @@ type FormAuthConfig struct {
 }
 
 type FormAuthSvc struct {
+	logger         *zerolog.Logger // will change to abstraction?
 	config         *FormAuthConfig
 	hasher         PasswordHasher
 	formAuthRepo   FormAuthRepo
@@ -58,8 +61,16 @@ func (fa *FormAuthSvc) Authenticate(
 	}
 
 	lockoutDur := int(fa.config.LockoutDur.Seconds() * 2 * float64(user.lockout.lockoutCount))
+	userLocked := user.LockoutAttempt(time.Duration(lockoutDur) * time.Second)
+	err = fa.userRepo.Update(ctx, user) // need to save the user after locking attempted.
 
-	if user.LockoutAttempt(time.Duration(lockoutDur) * time.Second) {
+	if err != nil {
+		fa.logger.Error().
+			Str("err", err.Error()).
+			Msg("Could not save locked user state while authenticating at UserRepo.Update")
+	}
+
+	if userLocked {
 		return nil, UserLocked
 	}
 
