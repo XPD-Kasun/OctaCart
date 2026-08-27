@@ -38,11 +38,11 @@ flowchart LR
 
 | Upstream (U) | Downstream (D) | Pattern | Notes |
 |---|---|---|---|
-| Auth | Product | OHS / Published Language | JWT claims provide sellerId to Product |
+| Auth | Product | OHS / Published Language | JWT claims provide admin/user identity (single-seller platform; no sellerId scoping) |
 | Auth | Order | OHS / Published Language | JWT claims provide customerId to Order |
 | Auth | Customer | OHS / Published Language | Identity provider for Customer profile |
 | Auth | Payment | OHS / Published Language | Auth context for payment initiation |
-| Product | Order | Customer–Supplier | Order reads product/variant/stock from Product; Product does not depend on Order |
+| Product | Order | Customer–Supplier | Order reads product/variant/stock from Product; Order consumes VariantPriceChanged & StockAdjusted events |
 | Product | Reporting | Customer–Supplier | Reporting consumes ProductPublished, StockAdjusted events |
 | Customer | Order | Customer–Supplier | Order reads customer shipping/billing address from Customer |
 | Order | Payment | Customer–Supplier | Payment processes order totals; Order initiates payment |
@@ -59,14 +59,16 @@ flowchart LR
 |---|---|---|
 | `Price` | Current display/sell price on a variant | Immutable price captured at time of purchase |
 | `Stock` | Current quantity on hand | Availability at time order was placed |
-| `Customer` | Not a concept (uses sellerId/UserId) | The shopper placing the order |
+| `Customer` | Not a concept | The shopper placing the order |
 | `Address` | Not a concept | Shipping: immutable destination snapshot on a shipment (Customer owns the editable address book) |
 
 ## Open Questions (Needs Human)
 
 - **Stock reservation model**: sync `ReserveStock` call vs. async event from Order to Product
 - **Event bus mechanism**: in-process function call vs. message broker (NATS/Kafka) — affects all Customer-Supplier relationships
-- **Multi-seller scope**: single-seller platform or marketplace — affects Product, Order, and Customer boundaries
 - **Fulfillment trigger** (Shipping, 2026-08-26): auto-shipment on OrderFulfilled/PaymentCaptured vs manual seller action — see `.agents/discover/shipping.md`
 - **Carrier scope v1** (Shipping, 2026-08-26): manual carriers only vs courier API integration; zone-based rates vs live carrier rates
 - **Returns ownership** (Shipping, 2026-08-26): RMA in Shipping (reverse-parcel logistics) with refunds in Payment, or RMA in Order
+
+## Architecture Baseline Decisions
+- **Multi-seller scope**: Single-seller / single-admin platform across all bounded contexts (no seller tenant scoping required).
