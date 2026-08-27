@@ -32,7 +32,7 @@ Add public getters for the below for Dto boundaries appservice -> handler.
 ---
 
 ### Value Types
-- **shared.KV** - `struct{k:string,v:string}` (Add this to shared package)
+- **shared.KV** - `struct{k:K,v:V}` (Refer this generic struct from shared to represent any key value pair)
 - **ProId** — `string` (opaque; DB-generated)
 - **ProVariantId** — `string` (opaque; DB-generated)
 - **CatId** — `string` (opaque; DB-generated)
@@ -41,8 +41,8 @@ Add public getters for the below for Dto boundaries appservice -> handler.
 - **Attribute** — `{name string, value string}` (e.g., `{name:"Color", value:"Red"}`)
 - **ProductStatus** — enum: `Draft | Active | Archived`
 - **ProAttributes** - map[string]AttrType - A tyoe collection of key, value for product attr name and datatype(see below).
-  This should have methods: Add(attr, datatype string), Attrs() : keys of the map, Remove(attr), New(...shared.KV)
-- **AttrType** - enum: `Num | Str | Enum (eg: Enum:XL|M|SX) | Range (eg: Range:1|10)` 
+  This should have methods: Add(attr string, datatype AttrType), Attrs() : keys of the map, Remove(attr), New()
+- **AttrType** - string any single of `Num | Str | Enum (eg: Enum:XL|M|SX) | Range (eg: Range:1|10)`. We need to have a parser for this as a method
 
 Note: datatype for `ProAttributes` is defined by us and is an enum. These are used as a kind of specification that is adhered by products attached to this category. Useful for filtering.
 ---

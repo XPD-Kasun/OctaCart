@@ -17,3 +17,4 @@ Recursive CTE, separete parent table, nested sets.
 - Image uploading is not a responsibility of `ProductSvc`. Therefore, we use a driving port `MediaRepo` with a application service `ProductMediaSvc`. We use asset to include images, videos etc. Currently images and videos are supported.
 - `Pagination` is a core need for any application service and adapters, therefore, we need to consider this in shared module and belongs to shared module.
 - Domain entities should not be leaked into the adapters. Even at the initial draft we found OK to do it. Therefore, after careful thoughts and considering all alternatives, we use unexported fields in entity with public getters(). Then we return this entity from app service to the driving adapters by value (creating a copy). This aligns well with GO's encapuslation model and reducing boilerplate of having lots of dto stuff.
+- Tags are needed to be considered.

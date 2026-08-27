@@ -8,3 +8,8 @@ type Claim string
 type UserId int
 
 type Money int64
+
+type KV[Key comparable, Val any] struct {
+	Key Key
+	Val Val
+}
