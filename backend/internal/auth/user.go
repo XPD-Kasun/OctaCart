@@ -29,7 +29,7 @@ func (l *Lockout) LockoutAttempt(lockoutDuration time.Duration) bool {
 		return false
 	}
 	l.lockoutCount--
-	if l.lockoutCount <= 0 {
+	if l.lockoutCount < 0 {
 		l.lockoutCount = 0
 		l.lockoutTill = time.Now().Add(lockoutDuration)
 		return true
@@ -67,7 +67,7 @@ func (u *User) LockoutAttempt(duration time.Duration) bool {
 
 func (u *User) ResetLockout(maxAttempts int) {
 	u.lockout.lockoutCount = maxAttempts
-	u.lockout.lockoutTill = time.Now()
+	u.lockout.lockoutTill = time.Now().Add(-time.Hour)
 }
 
 func (u *User) IsAuthenticated() bool {
