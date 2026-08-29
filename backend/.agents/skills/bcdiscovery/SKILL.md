@@ -31,7 +31,7 @@ Proceed through the workflow using [Inferred] and [Assumed] answers. Collect all
 
 ## Discovery Workflow
 
-Work through these steps in order. Write each context's findings to .agents/discover/{bc}.md, and the final context map to .agents/discover/context-map.md.
+Work through these steps in order. Write each context's findings to `.agents/discover/{bc}.md`, and the final context map to `.agents/discover/context-map.md`.
 
 ### Step 1 — Map the Domain at a High Level
 
@@ -97,7 +97,8 @@ If a check fails, merge, split, or redraw the boundary and re-validate.
 ### Step 8 — Document the Result
 
 Produce one Bounded Context Canvas per context plus a single context map (templates below).
-Write the context map to .agents/discover/context-map.md
+Write the context map to .agents/discover/context-map.md. 
+Write the discovered bounded context to .agents/discover/{boundedContext}/domain-model.md
 
 ## Boundary Heuristics Cheat Sheet
 
@@ -138,6 +139,8 @@ Consider following questions ask yourself as a domain expert.
 Do not use emojies unless required.
 
 ### Bounded Context Canvas (one per context)
+
+Bounded context type : <Core> | <Supported> | <Generic>
 
 ```markdown
 ## Bounded Context: <Name>
