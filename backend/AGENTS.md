@@ -40,4 +40,3 @@ bc = boundex context
   - shipping - shipping bc
 
 You should load the skill (only frontmatter) if not done yet.
-For implementation use `implement` skill.
