@@ -34,6 +34,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem
 } from '@/components/ui/sidebar';
+import { useState } from 'react';
 
 const navMain = [
     {
@@ -59,6 +60,16 @@ const navMain = [
 ]
 
 export function AppSidebar() {
+
+    let [selectedNav, setSelectedNav] = useState('Dashboard');
+
+    const onMenuSelected = (item) => {
+        if (selectedNav != item.title) {
+            setSelectedNav(item.title)
+        }
+    };
+
+
     return (
         <Sidebar collapsible="icon" variant='inset'>
             <SidebarHeader>
@@ -80,7 +91,7 @@ export function AppSidebar() {
                     <SidebarInput
                         id="sidebar-search"
                         placeholder="Search…"
-                        className="bg-background"
+                        className="bg-background border-1 border-sidebar-border"
                     />
                     <span className="sr-only">
                         <Search />
@@ -97,8 +108,10 @@ export function AppSidebar() {
                                 {group.items.map((item) => (
                                     <SidebarMenuItem key={item.title}>
                                         <SidebarMenuButton
-                                            isActive={item.active === true}
+                                            variant={item.title == selectedNav ? "outline" : "default"}
+                                            isActive={item.title == selectedNav}
                                             tooltip={item.title}
+                                            onClick={e => onMenuSelected(item)}
                                         >
                                             {item.icon && <item.icon className="size-4" />}
                                             <span>{item.title}</span>
@@ -119,7 +132,7 @@ export function AppSidebar() {
                                 render={
                                     <SidebarMenuButton
                                         size="lg"
-                                        className="bg-muted data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                                        className="border-sidebar-accent-border bg-sidebar-accent border-1 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                                     />
                                 }
                             >

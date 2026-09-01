@@ -1,9 +1,9 @@
 import { AdminShell } from "@/components/layout/Shell";
 import { cn } from "@/lib/utils";
 import "@/styles/style.css";
-import { IBM_Plex_Sans } from "next/font/google";
+import { Inter } from "next/font/google";
 
-const ibmPlexSans = IBM_Plex_Sans({ subsets: ['latin'], variable: '--font-sans' });
+const ibmPlexSans = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 
 export default function Layout({ children }) {
