@@ -15,6 +15,8 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
+  --color-menu-accent: var(--color-sidebar-accent);
+  --color-menu-accent-foreground: var(--color-sidebar-accent-foreground);
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
@@ -76,10 +78,6 @@
   --leading-dense: 1.2;
   /* table rows where vertical space is tight */
 
-  /* ---- Font weights ---- */
-  --font-regular: 400;
-  --font-medium: 500;
-  --font-semibold: 600;
 
   /* ---- Letter spacing ---- */
   --tracking-normal: 0;
@@ -115,13 +113,15 @@
   --chart-4: oklch(0.394 0.023 107.4);
   --chart-5: oklch(0.286 0.016 107.4);
   --radius: 0.45rem;
-  --sidebar: #eeeded;
+  --sidebar: oklch(94.688% 0.00105 11.528);
+  --sidebar-btn-active: oklch(87.194% 0.01502 80.642);
+  --sidebar-btn-hover: oklch(0.97 0 0);
   --sidebar-foreground: oklch(0.153 0.006 107.1);
   --sidebar-primary: oklch(0.228 0.013 107.4);
   --sidebar-primary-foreground: oklch(0.988 0.003 106.5);
-  --sidebar-accent: #e4e2de;
+  --sidebar-accent: oklch(91.322% 0.00571 84.455);
   --sidebar-accent-foreground: oklch(0.228 0.013 107.4);
-  --sidebar-border: #d7d0d0;
+  --sidebar-border: oklch(86.319% 0.00773 16.608);
   --sidebar-ring: oklch(0.737 0.021 106.9);
 }
 
@@ -172,3 +172,6 @@
     @apply font-sans;
   }
 }
+
+@import "./common-styles.css";
+@import "./shell-styles.css"; 
