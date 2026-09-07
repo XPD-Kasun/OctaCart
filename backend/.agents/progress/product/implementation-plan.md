@@ -12,6 +12,7 @@ Before you write any code, read the following instructions in full. These are yo
 
 - [ ] Read `AGENTS.md` at the project root to understand the architecture, tech stack, and folder structure.
 - [ ] Read `.agents/specs/product/domain-model.md` — this is your **authoritative spec**. Every type, method, and error you create must match it.
+- [ ] Read **all ADR files** `.agents/specs/product/ADR001.md` through `ADR009.md` — these are reviewed architectural decisions that inform implementation details. **Do NOT read `adr-archived.md**` — it is obsolete.
 - [ ] Read `.agents/discover/conventions.md` — this defines all coding style rules.
 - [ ] Read `.agents/discover/context-map.md` — this tells you the cross-BC boundaries. The product BC must **never** write to data owned by another BC.
 
@@ -28,6 +29,10 @@ Before you write any code, read the following instructions in full. These are yo
 9. **Tests**: Standard `testing` package only. Same package (white-box). Use `t.Run` subtests. Name pattern: `Test{Type}_{Method}`.
 10. **Imports**: stdlib → project → third-party, separated by blank lines.
 11. **Shared types**: `shared.Money` (int64), `shared.KV`, `shared.UserId`, `shared.Claim` already exist. You will add `shared.Pagination` and `shared.DomainEvent`.
+12. **Money (ADR-004)**: All monetary values are stored as `int64` in the **configured least minor units** (e.g., cents/paise). Single-currency per tenant. **No floating-point**. Currency is configured in Settings BC.
+13. **Media URIs (ADR-002)**: Product media URIs use **relative paths** for a configured storage directory or **direct URLs without `file:///` prefix**. The `MediaRepo`/`ImageStore` adapters resolve locations relative to environment config.
+14. **Logging (zerolog)**: All app services receive `*zerolog.Logger` via constructor. Use structured logging at key points: `Info` for successful mutations (create, publish, archive, stock adjust), `Warn` for business rule blocks (e.g., no variants), `Error` for unexpected failures. Always include entity IDs: `log.Info().Int("productId", int(id)).Msg("product published")`. Keep domain services log-free — logging is an app service concern.
+15. **OTel-readiness**: All service methods already take `context.Context` first. When OTel is added later, tracing spans attach to ctx at the Gin middleware layer. **No domain code changes needed** — just add middleware + optional `otel.Tracer.Start(ctx, ...)` in app service entry points.
 
 ### Test Running Protocol
 
@@ -40,29 +45,29 @@ Before you write any code, read the following instructions in full. These are yo
 
 You will create these files in `internal/product/`:
 
-| File | Contents |
-|------|----------|
-| `product.go` | Product entity, ProductVariant entity, Category entity, ProductMedia entity, all value types, constructors, domain methods. Package doc comment. |
-| `ports.go` | All driven port interfaces (ProductRepo, VariantRepo, CategoryRepo, MediaRepo, ImageStore, OrderQueryPort, EventPublisher) |
-| `errors.go` | All sentinel error vars |
-| `slug_service.go` | SlugGenerator domain service |
-| `stock_service.go` | StockAdjuster domain service |
-| `product_service.go` | ProductSvc application service |
-| `media_service.go` | ProductMediaSvc application service |
-| `category_service.go` | CategorySvc application service |
-| `query_service.go` | ProductQuerySvc application service |
-| `product_test.go` | Tests for entities and value types |
-| `slug_service_test.go` | Tests for SlugGenerator |
-| `stock_service_test.go` | Tests for StockAdjuster |
-| `product_service_test.go` | Tests for ProductSvc |
-| `media_service_test.go` | Tests for ProductMediaSvc |
-| `category_service_test.go` | Tests for CategorySvc |
-| `query_service_test.go` | Tests for ProductQuerySvc |
+| File                       | Contents                                                                                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `product.go`               | Product entity, ProductVariant entity, Category entity, ProductMedia entity, all value types, constructors, domain methods. Package doc comment. |
+| `ports.go`                 | All driven port interfaces (ProductRepo, VariantRepo, CategoryRepo, MediaRepo, ImageStore, OrderQueryPort, EventPublisher)                       |
+| `errors.go`                | All sentinel error vars                                                                                                                          |
+| `slug_service.go`          | SlugGenerator domain service                                                                                                                     |
+| `stock_service.go`         | StockAdjuster domain service                                                                                                                     |
+| `product_service.go`       | ProductSvc application service                                                                                                                   |
+| `media_service.go`         | ProductMediaSvc application service                                                                                                              |
+| `category_service.go`      | CategorySvc application service                                                                                                                  |
+| `query_service.go`         | ProductQuerySvc application service                                                                                                              |
+| `product_test.go`          | Tests for entities and value types                                                                                                               |
+| `slug_service_test.go`     | Tests for SlugGenerator                                                                                                                          |
+| `stock_service_test.go`    | Tests for StockAdjuster                                                                                                                          |
+| `product_service_test.go`  | Tests for ProductSvc                                                                                                                             |
+| `media_service_test.go`    | Tests for ProductMediaSvc                                                                                                                        |
+| `category_service_test.go` | Tests for CategorySvc                                                                                                                            |
+| `query_service_test.go`    | Tests for ProductQuerySvc                                                                                                                        |
 
 And in `internal/shared/`:
 
-| File | Contents |
-|------|----------|
+| File       | Contents                                                |
+| ---------- | ------------------------------------------------------- |
 | `types.go` | Add `Pagination` and `DomainEvent` to the existing file |
 
 ### Important — Existing Code
@@ -75,15 +80,16 @@ The file `internal/product/product.go` already exists with a **placeholder** `Pr
 
 ### 1.1 — Shared Type Structs
 
-- [ ] Open `internal/shared/types.go`
-- [ ] Add the `Pagination` struct with these fields:
+- [x] Open `internal/shared/types.go`
+- [x] Add the `Pagination` struct with these fields:
   - `Page int` — 1-based page number
   - `PerPage int` — items per page
   - Add a method `Offset() int` that returns `(Page - 1) * PerPage`
-- [ ] Add the `DomainEvent` interface:
+- [x] Add the `DomainEvent` interface:
   - `EventName() string` — returns the event's name
   - `OccurredAt() time.Time` — returns when the event occurred
-- [ ] Do NOT remove existing types (`Money`, `KV`, `UserId`, `Claim`)
+  - `ActorId() shared.UserId` — returns the admin/user who triggered the event (audit trail)
+- [x] Do NOT remove existing types (`Money`, `KV`, `UserId`, `Claim`)
 
 **>>> STOP. Tell the user: "Phase 1.1 complete: shared types structs. Ready for review." Wait for the user to say "proceed".**
 
@@ -112,48 +118,35 @@ The file `internal/product/product.go` already exists with a **placeholder** `Pr
 
 - [ ] Create (or replace entirely) `internal/product/product.go` with the file header and package doc comment.
 - [ ] Define the following value types in `product.go`:
-
-  **ID types** (type aliases):
-  - `type ProId string`
-  - `type ProVariantId string`
-  - `type CatId string`
-  - `type MediaId string`
-
+  **ID types** (type aliases — ADR-003 uses `int64`):
+  - `type ProId int`
+  - `type ProVariantId int`
+  - `type CatId int`
+  - `type MediaId int`  
   **ProductStatus** (typed string enum):
   - `type ProductStatus string`
   - Constants: `StatusDraft ProductStatus = "Draft"`, `StatusActive ProductStatus = "Active"`, `StatusArchived ProductStatus = "Archived"`
-
-  **Attribute**:
-  - `type Attribute struct` with unexported fields `name string`, `value string`
-  - Constructor: `NewAttribute(name, value string) Attribute`
-  - Getters: `Name() string`, `Value() string`
-
-  **AttrType** (ADR-001):
-  - `type AttrType string`
-  - Represent the discriminated string. Define constants: `AttrTypeNum`, `AttrTypeStr`
-  - For `Enum` and `Range` the constant is the prefix; values are formed dynamically: `"Enum:XL|M|SX"`, `"Range:1|10"`
-  - Add a factory function `NewEnumAttr(values ...string) AttrType` that produces `"Enum:val1|val2|..."`
-  - Add a factory function `NewRangeAttr(min, max int) AttrType` that produces `"Range:min|max"`
-  - Add a parser method `func (a AttrType) Parse() (kind string, params []string, err error)` that:
-    - Splits on first `:`
-    - Returns kind = `"Num"`, `"Str"`, `"Enum"`, or `"Range"`
-    - For `Enum`: params = the pipe-separated values
-    - For `Range`: params = `["min", "max"]` as strings
-    - For `Num`/`Str`: params = nil
-    - Returns error for unrecognized formats
-
-  **ProAttributes** (ADR-001):
-  - `type ProAttributes struct` with unexported field `attrs map[string]AttrType`
-  - Factory: `NewProAttributes() ProAttributes`
-  - Methods:
-    - `Add(attr string, dt AttrType)` — adds or updates
-    - `Attrs() []string` — returns sorted keys
-    - `Remove(attr string)` — deletes key
-    - `Get(attr string) (AttrType, bool)` — lookup by key
-  - Note: `Attrs()` should return keys in sorted order for deterministic output.
-
   **Money**:
   - `Money` is already `shared.Money` (`int64`) in the shared package. Use `shared.Money` throughout the product package. Do NOT redefine it.
+  **Attributes** (ADR-001 — opaque dynamic attribute map):
+  - Unexported helper: `type val struct { Type string; Value any }`
+  - `type Attributes struct` with unexported field `attrs map[string]*val`
+  - Factory: `NewAttributes() *Attributes` — initialises empty map
+  - Typed Add methods (each sets `Type` + `Value` in the map):
+    - `AddStr(name, value string)` — Type=`"str"`
+    - `AddNum(name string, value float64)` — Type=`"num"`
+    - `AddRange(name string, min, max int)` — Type=`"range"`, Value=`"min,max"` formatted string
+    - `AddEnum(name string, values ...string)` — Type=`"enum"`, Value=`"A|B|C"` pipe-joined
+  - Typed Get methods (return typed value + error if missing/wrong type):
+    - `GetStr(name string) (string, error)`
+    - `GetNum(name string) (float64, error)`
+    - `GetRange(name string) (min, max int, err error)` — parses `"min,max"` back
+    - `GetEnum(name string) ([]string, error)` — splits pipe-separated value
+  - General methods:
+    - `Remove(name string)`
+    - `Names() []string` — sorted keys
+    - `Has(name string) bool`
+  - Serialised as JSON for DB storage. Repo uses Add methods to hydrate from `(name, type, value)` rows or JSONB.
 
 **>>> STOP. Tell the user: "Phase 2.1 complete: value type structs and constructors. Ready for review." Wait for the user to say "proceed".**
 
@@ -161,35 +154,18 @@ The file `internal/product/product.go` already exists with a **placeholder** `Pr
 
 - [ ] Create `internal/product/product_test.go` with file header
 - [ ] Write tests for:
-
-  **TestAttribute**:
-  - `"new attribute/should store name and value"` — verify `NewAttribute("Color", "Red").Name()` and `.Value()`
-
-  **TestAttrType_Parse**:
-  - `"Num type/should parse"` — `AttrTypeNum.Parse()` → kind=`"Num"`, params=nil, err=nil
-  - `"Str type/should parse"` — `AttrTypeStr.Parse()` → kind=`"Str"`, params=nil, err=nil
-  - `"Enum type/should parse values"` — `NewEnumAttr("XL","M","SX").Parse()` → kind=`"Enum"`, params=`["XL","M","SX"]`
-  - `"Range type/should parse min max"` — `NewRangeAttr(1,10).Parse()` → kind=`"Range"`, params=`["1","10"]`
-  - `"invalid type/should error"` — `AttrType("Bogus:xyz").Parse()` → error
-
-  **TestNewEnumAttr**:
-  - `"creates enum string"` — `NewEnumAttr("A","B")` → `AttrType("Enum:A|B")`
-
-  **TestNewRangeAttr**:
-  - `"creates range string"` — `NewRangeAttr(5, 20)` → `AttrType("Range:5|20")`
-
-  **TestProAttributes**:
-  - `"new/should be empty"` — `NewProAttributes().Attrs()` → empty slice
-  - `"add and get/should retrieve"` — Add `("Color", AttrTypeStr)`, then `Get("Color")` → `AttrTypeStr, true`
-  - `"add duplicate/should overwrite"` — Add `("Size", AttrTypeNum)`, then Add `("Size", AttrTypeStr)`, then `Get("Size")` → `AttrTypeStr`
-  - `"remove/should delete"` — Add `("X", AttrTypeNum)`, Remove `("X")`, then `Get("X")` → `"", false`
-  - `"attrs/should return sorted keys"` — Add `"Z"`, `"A"`, `"M"`, then `Attrs()` → `["A", "M", "Z"]`
-
+  **TestAttributes**:
+  - `"new/should be empty"` — `NewAttributes().Names()` → empty slice
+  - `"AddStr and GetStr"` — `AddStr("Color","Red")` → `GetStr("Color")` returns `"Red"`, nil
+  - `"AddNum and GetNum"` — `AddNum("Weight",1.5)` → `GetNum("Weight")` returns `1.5`, nil
+  - `"AddRange and GetRange"` — `AddRange("Size",1,10)` → `GetRange("Size")` returns `1, 10, nil`
+  - `"AddEnum and GetEnum"` — `AddEnum("Size","S","M","L")` → `GetEnum("Size")` returns `["S","M","L"]`, nil
+  - `"GetStr missing/should error"` — `GetStr("nope")` returns error
+  - `"Remove/should delete"` — Add then Remove → `Has()` returns false
+  - `"Names/should return sorted"` — Add `"Z"`, `"A"`, `"M"` → `Names()` returns `["A","M","Z"]`
+  - `"overwrite/should replace"` — `AddStr("X","a")` then `AddNum("X",1)` → `GetNum("X")` works, `GetStr("X")` errors
   **TestProductStatus constants**:
   - Verify `StatusDraft`, `StatusActive`, `StatusArchived` have correct string values
-
-**>>> STOP. Wait for user to say "proceed".**
-
 ### 2.3 — Value Type Implementation & Test Run
 
 - [ ] Implementations should already exist from 2.1. Make any adjustments needed to pass the tests.
@@ -206,8 +182,9 @@ The file `internal/product/product.go` already exists with a **placeholder** `Pr
 All entities go in `internal/product/product.go` (append after value types).
 
 **Product** (Aggregate Root):
+
 - [ ] Struct with unexported fields matching the spec: `id ProId`, `title string`, `slug string`, `description string`, `status ProductStatus`, `categoryId CatId`, `tags []string`, `isDigital bool`, `createdAt time.Time`, `updatedAt time.Time`
-- [ ] Public getters for all fields: `Id()`, `Title()`, `Slug()`, `Description()`, `Status()`, `CategoryId()`, `Tags()`, `IsDigital()`, `CreatedAt()`, `UpdatedAt()`
+- [ ] Public getters for all fields: `Id()`, `Title()`, `Slug()`, `Description()`,`SKU()`, `Status()`, `CategoryId()`, `Tags()`, `IsDigital()`, `CreatedAt()`, `UpdatedAt()`
 - [ ] Constructor: `NewProduct(title, description string, categoryId CatId, isDigital bool, tags []string) (*Product, error)`:
   - Sets `status` to `StatusDraft`
   - Sets `createdAt` and `updatedAt` to `time.Now()`
@@ -226,9 +203,10 @@ All entities go in `internal/product/product.go` (append after value types).
   - `IsDigital *bool`
 
 **ProductVariant**:
-- [ ] Struct with unexported fields: `id ProVariantId`, `productId ProId`, `sku string`, `price shared.Money`, `compareAtPrice *shared.Money` (pointer for nullable), `stockQty int`, `attrs ProAttributes`, `mediaId *MediaId` (pointer for nullable)
+
+- [ ] Struct with unexported fields: `id ProVariantId`, `productId ProId`, `sku string`, `price shared.Money`, `compareAtPrice *shared.Money` (pointer for nullable), `stockQty int`, `attrs *Attributes`, `mediaId *MediaId` (pointer for nullable)
 - [ ] Public getters for all fields
-- [ ] Constructor: `NewProductVariant(productId ProId, sku string, price shared.Money, attrs ProAttributes) (*ProductVariant, error)`:
+- [ ] Constructor: `NewProductVariant(productId ProId, sku string, price shared.Money, attrs *Attributes) (*ProductVariant, error)`:
   - Validates `sku` is not empty
   - Validates `price >= 0`
   - Sets `stockQty` to 0
@@ -239,29 +217,39 @@ All entities go in `internal/product/product.go` (append after value types).
   - `SKU *string`
   - `Price *shared.Money`
   - `CompareAtPrice **shared.Money` (double pointer: outer nil = "don't touch", inner nil = "set to null")
-  - `Attrs *ProAttributes`
+  - `Attrs *Attributes`
   - `MediaId **MediaId`
 - [ ] Helper to check if price changed: `SetPrice(newPrice shared.Money) (oldPrice shared.Money, changed bool)` — sets price and returns old + whether it changed
 
 **Category**:
-- [ ] Struct with unexported fields: `id CatId`, `name string`, `slug string`, `path string`, `attrs ProAttributes`
-- [ ] Public getters for all fields
-- [ ] Constructor: `NewCategory(name, slug string, parentPath string, parentId CatId) (*Category, error)`:
+
+- [ ] Struct with unexported fields: `id CatId`, `name string`, `slug string`, `parentId *CatId` (nullable for root — ADR-003), `path string`, `depth int` (ADR-003), `sortOrder int` (ADR-003), `attrs *Attributes`
+- [ ] Public getters for all fields: `Id()`, `Name()`, `Slug()`, `ParentId()`, `Path()`, `Depth()`, `SortOrder()`, `Attrs()`
+- [ ] Constructor: `NewCategory(name, slug string, parentPath string, parentId *CatId) (*Category, error)`:
   - Validates `name` is not empty
-  - Computes `path`: if `parentPath` is empty → path = `string(id)` (but since id is DB-assigned and empty at creation, the path will be set by the repo/service after save). For now, set path to empty and let the service compute it after the ID is assigned.
-  - Alternatively: accept a computed path as param: `NewCategory(name, slug, path string) (*Category, error)`
-  - Sets `attrs` to `NewProAttributes()` (empty)
+  - Computes `depth` from `parentPath`: if empty → depth=0 (root); else depth = count dots in parentPath + 1
+  - `path` is set to empty at construction (computed post-save when ID is known — see Spec Deviations)
+  - Sets `parentId` to the given parent pointer (nil for root)
+  - Sets `sortOrder` to 0 (caller/service can adjust)
+  - Sets `attrs` to `NewAttributes()` (empty)
 - [ ] Domain method: `Update(cmd UpdateCatCmd)` — updates mutable fields
-- [ ] Command struct `UpdateCatCmd`: `Name *string`, `Slug *string`, `Attrs *ProAttributes`
+- [ ] Domain method: `SetPath(path string)` — sets the path after DB assigns the ID
+- [ ] Domain method: `SetSortOrder(order int)` — sets sort order
+- [ ] Command struct `UpdateCatCmd`: `Name *string`, `Slug *string`, `Attrs *Attributes`
+
+> **Note (ADR-003)**: `depth` and `parentId` can also be derived from `path`, but storing them enables efficient queries without parsing. `sortOrder` controls sibling display order in category menus.
 
 **CatNode** (tree helper, per ADR-003):
-- [ ] `type CatNode struct` with exported fields: `Cat Category`, `Children []*CatNode`
-- [ ] Function `BuildCatTree(cats []Category) []*CatNode` — converts a flat list of categories into a tree. Use the algorithm from ADR-003 adapted to use `path` for parent lookup.
+
+- [ ] `type CatNode struct` with exported fields: `Cat Category`, `Parent *CatNode` (ADR-003 algorithm), `Children []*CatNode`
+- [ ] Function `BuildCatTree(cats []Category) []*CatNode` — converts a flat list of categories into a tree. Use the algorithm from ADR-003: build a cache map, link each node to its parent via `parentId`, and collect children. Returns root nodes (those with nil parent).
 
 **ProductMedia**:
+
 - [ ] Struct with unexported fields: `id MediaId`, `productId ProId`, `uri string`, `altText string`, `order int`
 - [ ] Public getters for all fields
 - [ ] Constructor: `NewProductMedia(productId ProId, uri, altText string, order int) *ProductMedia`
+  - **Note (ADR-002)**: `uri` must be a relative path or direct URL. Never use `file:///` prefix. The `ImageStore.Store` adapter returns paths in this format.
 
 **>>> STOP. Tell the user: "Phase 3.1 complete: entity structs. Ready for review." Wait for the user to say "proceed".**
 
@@ -270,47 +258,68 @@ All entities go in `internal/product/product.go` (append after value types).
 - [ ] Add to `internal/product/product_test.go`:
 
 **TestNewProduct**:
+
 - `"valid input/should create draft product"` — verify status=Draft, title set, createdAt not zero
 - `"empty title/should return error"` — verify error returned
 
 **TestProduct_Publish**:
+
 - `"draft product/should transition to active"` — NewProduct → Publish → status=Active
 - `"active product/should return ErrInvalidTransition"` — NewProduct → Publish → Publish → error
 - `"archived product/should return ErrInvalidTransition"` — NewProduct → Publish → Archive → Publish → error
 
 **TestProduct_Archive**:
+
 - `"active product/should transition to archived"` — NewProduct → Publish → Archive → status=Archived
 - `"draft product/should return ErrInvalidTransition"` — NewProduct → Archive → error
 
 **TestProduct_Update**:
+
 - `"update title/should set title and refresh updatedAt"` — create, sleep briefly, update with Title ptr, verify new title and updatedAt changed
 - `"nil fields/should not change"` — create, update with all-nil UpdateProductCmd, verify nothing changed
 
 **TestProduct_SetSlug**:
+
 - `"should set slug"` — NewProduct → SetSlug("my-slug") → Slug() == "my-slug"
 
 **TestNewProductVariant**:
+
 - `"valid input/should create variant"` — verify sku, price, stockQty=0
 - `"empty sku/should return error"`
 - `"negative price/should return error"`
 
 **TestProductVariant_AdjustStock**:
+
 - `"positive delta/should increase stock"` — start 0, adjust +10 → stockQty=10
 - `"negative delta within range/should decrease"` — stockQty=10, adjust -5 → stockQty=5
 - `"negative delta below zero/should return ErrInsufficientStock"` — stockQty=3, adjust -5 → error
 
 **TestProductVariant_SetPrice**:
+
 - `"changed price/should return old and true"` — price=100, SetPrice(200) → old=100, changed=true
 - `"same price/should return old and false"` — price=100, SetPrice(100) → old=100, changed=false
 
 **TestNewCategory**:
-- `"valid input/should create category"` — verify name, slug, empty attrs
+
+- `"valid input/should create category"` — verify name, slug, empty attrs, depth=0 for root, parentId=nil for root
+- `"child category/should compute depth from parent path"` — parentPath="1.2" → depth=2
 - `"empty name/should return error"`
 
+**TestCategory_SetPath**:
+
+- `"should set path"` — NewCategory → SetPath("1.2.3") → Path() == "1.2.3"
+
+**TestCategory_SetSortOrder**:
+
+- `"should set sort order"` — NewCategory → SetSortOrder(5) → SortOrder() == 5
+
 **TestBuildCatTree**:
-- `"flat list/should build correct hierarchy"` — Given categories with paths "1", "1.2", "1.3" → root has 2 children
+
+- `"flat list/should build correct hierarchy with parent links"` — Given categories with paths "1", "1.2", "1.3" → root has 2 children, each child's Parent points to root
+- `"single root/should have nil parent"` — verify root CatNode has Parent == nil
 
 **TestNewProductMedia**:
+
 - `"should create media with all fields"` — verify uri, altText, order
 
 **>>> STOP. Wait for user to say "proceed".**
@@ -329,6 +338,7 @@ All entities go in `internal/product/product.go` (append after value types).
 ### 4.1 — Error Sentinels & Port Interfaces
 
 **errors.go**:
+
 - [ ] Create `internal/product/errors.go` with file header
 - [ ] Define all sentinel errors:
   ```
@@ -347,25 +357,22 @@ All entities go in `internal/product/product.go` (append after value types).
   ```
 
 **ports.go**:
+
 - [ ] Create `internal/product/ports.go` with file header
 - [ ] Define all driven port interfaces exactly as specified in the domain-model.md:
-
   **ProductRepo** interface:
   - `Save(ctx context.Context, product *Product) error`
   - `FindById(ctx context.Context, id ProId) (*Product, error)`
   - `FindBySlug(ctx context.Context, slug string) (*Product, error)`
   - `List(ctx context.Context, filter ProductFilter, page shared.Pagination) ([]*Product, error)`
-  - `Delete(ctx context.Context, id ProId) error`
-
-  **Note**: You will also need to define `ProductFilter` struct. Define it here or in `product.go`. It should include optional filter fields like `Status *ProductStatus`, `CategoryId *CatId`, `Tags []string`, `SearchQuery *string`.
-
+  - `Delete(ctx context.Context, id ProId) error`  
+  **Note**: You will also need to define `ProductFilter` struct. Define it here or in `product.go`. It should include optional filter fields like `Status *ProductStatus`, `CategoryId *CatId`, `Tags []string`, `SearchQuery *string`.  
   **VariantRepo** interface:
   - `Save(ctx context.Context, variant *ProductVariant) error`
   - `FindById(ctx context.Context, id ProVariantId) (*ProductVariant, error)`
   - `FindByProductId(ctx context.Context, productId ProId) ([]*ProductVariant, error)`
   - `FindBySKU(ctx context.Context, sku string, productId ProId) (*ProductVariant, error)`
-  - `Delete(ctx context.Context, id ProVariantId) error`
-
+  - `Delete(ctx context.Context, id ProVariantId) error`  
   **CategoryRepo** interface:
   - `Save(ctx context.Context, cat *Category) error`
   - `GetCatBySlug(ctx context.Context, slug string) (*Category, error)`
@@ -376,21 +383,17 @@ All entities go in `internal/product/product.go` (append after value types).
   - `GetSubtree(ctx context.Context, id CatId) ([]*Category, error)`
   - `Move(ctx context.Context, id CatId, parentId CatId) error`
   - `GetDepth(ctx context.Context, depth int) ([]*Category, error)`
-  - `Delete(ctx context.Context, id CatId) error`
-
+  - `Delete(ctx context.Context, id CatId) error`  
   **MediaRepo** interface:
   - `Save(ctx context.Context, media *ProductMedia) error`
   - `FindById(ctx context.Context, id MediaId) (*ProductMedia, error)`
   - `FindByProId(ctx context.Context, productId ProId) ([]*ProductMedia, error)`
-  - `Delete(ctx context.Context, id MediaId) error`
-
+  - `Delete(ctx context.Context, id MediaId) error`  
   **ImageStore** interface:
   - `Store(ctx context.Context, file io.Reader, filename string) (string, error)`
-  - `Delete(ctx context.Context, filePath string) error`
-
+  - `Delete(ctx context.Context, filePath string) error`  
   **OrderQueryPort** interface:
-  - `HasActiveOrdersForVariant(ctx context.Context, variantId ProVariantId) (bool, error)`
-
+  - `HasActiveOrdersForVariant(ctx context.Context, variantId ProVariantId) (bool, error)`  
   **EventPublisher** interface:
   - `Publish(ctx context.Context, event shared.DomainEvent) error`
 
@@ -421,6 +424,7 @@ All entities go in `internal/product/product.go` (append after value types).
 ### 5.1 — Domain Service Structs
 
 **SlugGenerator** — `internal/product/slug_service.go`:
+
 - [ ] Create with file header
 - [ ] Define `type SlugGenerator struct{}` (stateless — no dependencies stored; repo passed per call)
 - [ ] Function `NewSlugGenerator() *SlugGenerator`
@@ -436,6 +440,7 @@ All entities go in `internal/product/product.go` (append after value types).
   - Note: We use a function callback `checkSlug` rather than the full `ProductRepo` interface to keep the domain service decoupled. The application service passes `repo.FindBySlug` as the callback.
 
 **StockAdjuster** — `internal/product/stock_service.go`:
+
 - [ ] Create with file header
 - [ ] Define `type StockAdjuster struct{}` (stateless)
 - [ ] Function `NewStockAdjuster() *StockAdjuster`
@@ -449,23 +454,25 @@ All entities go in `internal/product/product.go` (append after value types).
   - Return any error from publishing
 
 **Domain Events** (define in `product.go` or a separate `events.go` — your choice, but keep in same package):
+
 - [ ] `type StockAdjustedEvent struct`:
-  - `VariantId ProVariantId`, `Delta int`, `NewQty int`, `occurredAt time.Time`
+  - `ProductId ProId`, `VariantId ProVariantId`, `Delta int`, `NewQty int`, `actorId shared.UserId`, `occurredAt time.Time`
   - Implements `shared.DomainEvent`
 - [ ] `type ProductPublishedEvent struct`:
-  - `ProductId ProId`, `Title string`, `Slug string`, `occurredAt time.Time`
+  - `ProductId ProId`, `Title string`, `Slug string`, `actorId shared.UserId`, `occurredAt time.Time`
 - [ ] `type ProductArchivedEvent struct`:
-  - `ProductId ProId`, `occurredAt time.Time`
+  - `ProductId ProId`, `actorId shared.UserId`, `occurredAt time.Time`
 - [ ] `type VariantPriceChangedEvent struct`:
-  - `VariantId ProVariantId`, `OldPrice shared.Money`, `NewPrice shared.Money`, `occurredAt time.Time`
+  - `VariantId ProVariantId`, `OldPrice shared.Money`, `NewPrice shared.Money`, `actorId shared.UserId`, `occurredAt time.Time`
 
-All events implement `shared.DomainEvent` interface.
+All events implement `shared.DomainEvent` interface. The `actorId` is extracted from `ctx` (via `shared.Claim`) by the app service before constructing the event.
 
 **>>> STOP. Tell the user: "Phase 5.1 complete: domain service structs and event types. Ready for review." Wait for the user to say "proceed".**
 
 ### 5.2 — Domain Service Tests
 
 **`internal/product/slug_service_test.go`**:
+
 - [ ] Create with file header
 - [ ] `TestSlugGenerator_Generate`:
   - `"simple title/should slugify"` — `"My Product"` → `"my-product"` (with checkSlug returning nil/not-found)
@@ -476,6 +483,7 @@ All events implement `shared.DomainEvent` interface.
   - For the mock `checkSlug` function: create a simple closure that returns a `*Product` on first call and `nil, ErrProductNotFound` on subsequent calls (or use a counter).
 
 **`internal/product/stock_service_test.go`**:
+
 - [ ] Create with file header
 - [ ] Create a mock `EventPublisher` (a struct implementing the interface that records published events)
 - [ ] `TestStockAdjuster_Adjust`:
@@ -500,6 +508,7 @@ All events implement `shared.DomainEvent` interface.
 ### 6.1 — ProductSvc Struct
 
 **`internal/product/product_service.go`**:
+
 - [ ] Create with file header
 - [ ] Define `ProductSvc` struct with dependencies:
   ```
@@ -515,64 +524,62 @@ All events implement `shared.DomainEvent` interface.
   ```
 - [ ] Constructor: `NewProductSvc(productRepo ProductRepo, variantRepo VariantRepo, mediaRepo MediaRepo, imageStore ImageStore, orderQuery OrderQueryPort, eventPub EventPublisher, slugGen *SlugGenerator, stockAdj *StockAdjuster, logger *zerolog.Logger) *ProductSvc`
 - [ ] Define `ProductCreateInput` struct: `Title string`, `Description string`, `CategoryId CatId`, `IsDigital bool`, `Tags []string`
-- [ ] Define `AddVariantInput` struct: `SKU string`, `Price shared.Money`, `Attrs ProAttributes`
+- [ ] Define `AddVariantInput` struct: `SKU string`, `Price shared.Money`, `Attrs *Attributes`
 - [ ] Implement methods:
-
   **CreateProduct(ctx, input ProductCreateInput) (Product, error)**:
   - Call `NewProduct(input.Title, input.Description, input.CategoryId, input.IsDigital, input.Tags)`
   - Generate slug via `slugGen.Generate(ctx, input.Title, productRepo.FindBySlug)`
   - Set slug on product
   - Save via `productRepo.Save`
-  - Return product by value
-
+  - Log: `logger.Info().Int("productId", int(product.Id())).Str("slug", product.Slug()).Msg("product created")`
+  - Return product by value  
   **UpdateProduct(ctx, productId ProId, cmd UpdateProductCmd) (Product, error)**:
   - Load product via `productRepo.FindById`
   - If cmd.Title is set and changed, re-generate slug
   - Call `product.Update(cmd)`
   - Save via `productRepo.Save`
-  - Return product by value
-
+  - Log: `logger.Info().Int("productId", int(productId)).Msg("product updated")`
+  - Return product by value  
   **PublishProduct(ctx, productId ProId) error**:
   - Load product
   - Check at least 1 variant exists via `variantRepo.FindByProductId`
+  - If no variants: `logger.Warn().Int("productId", int(productId)).Msg("publish blocked: no variants")`; return error
   - Call `product.Publish()`
   - Save product
-  - Publish `ProductPublishedEvent`
-
+  - Publish `ProductPublishedEvent` (extract actorId from ctx)
+  - Log: `logger.Info().Int("productId", int(productId)).Msg("product published")`  
   **ArchiveProduct(ctx, productId ProId) error**:
   - Load product
   - Call `product.Archive()`
   - Save product
-  - Publish `ProductArchivedEvent`
-
+  - Publish `ProductArchivedEvent` (extract actorId from ctx)
+  - Log: `logger.Info().Int("productId", int(productId)).Msg("product archived")`  
   **AddVariant(ctx, productId ProId, input AddVariantInput) (ProductVariant, error)**:
   - Check product exists
   - Check SKU uniqueness via `variantRepo.FindBySKU`
   - Create variant via `NewProductVariant`
   - Save via `variantRepo.Save`
-  - Return variant by value
-
+  - Return variant by value  
   **UpdateVariant(ctx, variantId ProVariantId, cmd UpdateVariantCmd) error**:
   - Load variant
   - Track if price changed (for event)
   - Call `variant.Update(cmd)`
   - Save
-  - If price changed, publish `VariantPriceChangedEvent`
-
+  - If price changed, publish `VariantPriceChangedEvent` (extract actorId from ctx)
+  - Log: `logger.Info().Int("variantId", int(variantId)).Msg("variant updated")`  
   **RemoveVariant(ctx, variantId ProVariantId) error**:
   - Check `orderQuery.HasActiveOrdersForVariant` → if true, return `ErrVariantHasActiveOrders`
   - Delete via `variantRepo.Delete`
-
+  - Log: `logger.Info().Int("variantId", int(variantId)).Msg("variant removed")`  
   **AdjustStock(ctx, variantId ProVariantId, delta int) error**:
   - Load variant
-  - Call `stockAdj.Adjust(ctx, variant, delta, eventPub)`
+  - Call `stockAdj.Adjust(ctx, variant, delta, eventPub)` (StockAdjuster constructs event with actorId from ctx)
   - Save variant
-
+  - Log: `logger.Info().Int("variantId", int(variantId)).Int("delta", delta).Msg("stock adjusted")`  
   **ReorderImages(ctx, productId ProId, orderedIds []MediaId) error**:
   - Load all media for product
   - For each orderedId, find the matching media and update its `order` field to the index position
-  - Save each updated media
-
+  - Save each updated media  
   **RemoveImage(ctx, imageId MediaId) error**:
   - Load media by ID
   - Delete from `imageStore.Delete(media.uri)`
@@ -583,6 +590,7 @@ All events implement `shared.DomainEvent` interface.
 ### 6.2 — ProductSvc Tests
 
 **`internal/product/product_service_test.go`**:
+
 - [ ] Create with file header
 - [ ] Create mock implementations for all ports:
   - `mockProductRepo` — in-memory map[ProId]*Product
@@ -596,32 +604,40 @@ All events implement `shared.DomainEvent` interface.
 **Test cases**:
 
 `TestProductSvc_CreateProduct`:
+
 - `"valid input/should create draft product with slug"` — verify returned product has Draft status, non-empty slug
 - `"empty title/should return error"` — verify error
 
 `TestProductSvc_PublishProduct`:
+
 - `"draft with variants/should publish"` — create product, add variant, then publish → status Active, event published
 - `"draft without variants/should return error"` — create product, publish → error (no variants)
 
 `TestProductSvc_ArchiveProduct`:
+
 - `"active product/should archive"` — create, add variant, publish, archive → status Archived
 
 `TestProductSvc_AddVariant`:
+
 - `"valid input/should add variant"` — verify variant saved, SKU correct
 - `"duplicate SKU/should return ErrDuplicateSKU"` — add variant with same SKU twice
 
 `TestProductSvc_RemoveVariant`:
+
 - `"no active orders/should remove"` — mock OrderQueryPort returns false → variant deleted
 - `"has active orders/should return ErrVariantHasActiveOrders"` — mock returns true → error
 
 `TestProductSvc_AdjustStock`:
+
 - `"positive delta/should adjust and publish event"` — verify stock changed, event published
 - `"insufficient stock/should return error"` — verify error, no event
 
 `TestProductSvc_ReorderImages`:
+
 - `"valid order/should reorder"` — create 3 media, reorder, verify new order values
 
 `TestProductSvc_RemoveImage`:
+
 - `"existing image/should delete from store and repo"` — verify both mock calls
 
 **>>> STOP. Wait for user to say "proceed".**
@@ -640,19 +656,18 @@ All events implement `shared.DomainEvent` interface.
 ### 7.1 — ProductMediaSvc Struct
 
 **`internal/product/media_service.go`**:
+
 - [ ] Create with file header
 - [ ] Define `ProductMediaSvc` struct with dependencies: `mediaRepo MediaRepo`, `imageStore ImageStore`, `productRepo ProductRepo`, `logger *zerolog.Logger`
 - [ ] Constructor: `NewProductMediaSvc(mediaRepo, imageStore, productRepo, logger)`
 - [ ] Implement methods:
-
   **UploadImage(ctx, productId ProId, fileStream io.Reader, altText string) (ProductMedia, error)**:
   - Verify product exists via `productRepo.FindById`
   - Store file via `imageStore.Store`
   - Determine next order number by counting existing media via `mediaRepo.FindByProId`
   - Create `ProductMedia` via `NewProductMedia`
   - Save via `mediaRepo.Save`
-  - Return by value
-
+  - Return by value  
   **UploadVideo(ctx, productId ProId, fileStream io.Reader) (ProductMedia, error)**:
   - Same as UploadImage but with empty altText (or a default)
   - Store file via `imageStore.Store`
@@ -663,6 +678,7 @@ All events implement `shared.DomainEvent` interface.
 ### 7.2 — ProductMediaSvc Tests
 
 **`internal/product/media_service_test.go`**:
+
 - [ ] Reuse the mock implementations from Phase 6
 - [ ] `TestProductMediaSvc_UploadImage`:
   - `"valid product/should store and save media"` — verify imageStore.Store called, mediaRepo.Save called, returned media has correct URI
@@ -685,38 +701,33 @@ All events implement `shared.DomainEvent` interface.
 ### 8.1 — CategorySvc Struct
 
 **`internal/product/category_service.go`**:
+
 - [ ] Create with file header
 - [ ] Define `CategorySvc` struct with dependencies: `catRepo CategoryRepo`, `productRepo ProductRepo`, `logger *zerolog.Logger`
 - [ ] Constructor: `NewCategorySvc(catRepo, productRepo, logger)`
-- [ ] Define `UpdateCatInput` struct if not already defined: `Name *string`, `Slug *string`, `Attrs *ProAttributes`
+- [ ] Define `UpdateCatInput` struct if not already defined: `Name *string`, `Slug *string`, `Attrs *Attributes`
 - [ ] Implement methods:
-
   **CreateCat(ctx, catName string, parentCategory CatId, subCategories []CatId) (Category, error)**:
   - If parentCategory is not empty, load parent via `catRepo.GetCatById` (verify exists)
   - Create category via `NewCategory`
   - Save via `catRepo.Save` (repo assigns ID)
   - Compute path: if parent exists, path = `parentPath + "." + string(newCat.Id())`; if root, path = `string(newCat.Id())`
   - Update category path and re-save
-  - Handle subCategories: move them under the new category (optional — depends on whether repo assigns IDs on Save)
-
+  - Handle subCategories: move them under the new category (optional — depends on whether repo assigns IDs on Save)  
   **UpdateCat(ctx, categoryId CatId, input UpdateCatInput) error**:
   - Load category
   - Apply updates
-  - Save
-
+  - Save  
   **DeleteCat(ctx, categoryId CatId) error**:
   - Check if any products use this category (via `productRepo.List` with category filter)
   - If products exist, return `ErrCategoryInUse`
-  - Delete via `catRepo.Delete`
-
+  - Delete via `catRepo.Delete`  
   **GetCatById(ctx, catId CatId) (Category, error)**:
   - Delegate to `catRepo.GetCatById`
-  - Return by value
-
+  - Return by value  
   **GetCatBySlug(ctx, slug string) (Category, error)**:
   - Delegate to `catRepo.GetCatBySlug`
-  - Return by value
-
+  - Return by value  
   **GetDescendents(ctx, cat Category) ([]Category, error)**:
   - Delegate to `catRepo.GetDescendCats(ctx, cat.Id())`
   - Return by value (convert []*Category to []Category)
@@ -726,6 +737,7 @@ All events implement `shared.DomainEvent` interface.
 ### 8.2 — CategorySvc Tests
 
 **`internal/product/category_service_test.go`**:
+
 - [ ] Create mock `CategoryRepo` (in-memory)
 - [ ] `TestCategorySvc_CreateCat`:
   - `"root category/should create with path"` — verify category created, path set
@@ -752,17 +764,14 @@ All events implement `shared.DomainEvent` interface.
 ### 9.1 — ProductQuerySvc Struct
 
 **`internal/product/query_service.go`**:
+
 - [ ] Create with file header
 - [ ] Define `ProductQuerySvc` struct with dependencies: `productRepo ProductRepo`, `variantRepo VariantRepo`
 - [ ] Constructor: `NewProductQuerySvc(productRepo, variantRepo)`
 - [ ] Implement methods (all are thin delegations to repos):
-
-  **GetProduct(ctx, productId ProId) (*Product, error)** — delegates to `productRepo.FindById`
-
-  **GetProducts(ctx, filter ProductFilter, page shared.Pagination) ([]*Product, error)** — delegates to `productRepo.List`
-
-  **GetVariant(ctx, variantId ProVariantId) (*ProductVariant, error)** — delegates to `variantRepo.FindById`
-
+  **GetProduct(ctx, productId ProId) (Product, error)* — delegates to `productRepo.FindById`  
+  **GetProducts(ctx, filter ProductFilter, page shared.Pagination) ([]Product, error)* — delegates to `productRepo.List`  
+  **GetVariant(ctx, variantId ProVariantId) (ProductVariant, error)* — delegates to `variantRepo.FindById`  
   **GetStockLevel(ctx, variantId ProVariantId) (int, error)** — loads variant, returns `variant.StockQty()`
 
 **>>> STOP. Tell the user: "Phase 9.1 complete: ProductQuerySvc. Ready for review." Wait for the user to say "proceed".**
@@ -770,6 +779,7 @@ All events implement `shared.DomainEvent` interface.
 ### 9.2 — ProductQuerySvc Tests
 
 **`internal/product/query_service_test.go`**:
+
 - [ ] Reuse mocks
 - [ ] `TestProductQuerySvc_GetProduct`:
   - `"existing product/should return"` — verify
@@ -802,9 +812,25 @@ All events implement `shared.DomainEvent` interface.
 
 ## Spec Deviations
 
-| Item | Deviation | Rationale |
-|------|-----------|-----------|
-| `SlugGenerator.Generate` signature | Uses `checkSlug` callback function instead of `ProductRepo` interface | Keeps domain service decoupled from the full repo interface; application service passes `repo.FindBySlug` as callback |
-| `Category` constructor | Path is computed post-save (since ID is DB-assigned) rather than at construction time | ID is not known until after `Save`; path computation requires the ID |
-| `ProductFilter` struct | Not in spec — added as a required parameter type for `ProductRepo.List` | Needed to compile the repo interface; exact fields are a filtering concern |
-| `ErrMediaNotFound` | Not in spec — added | Needed for `RemoveImage` and `UploadImage` error paths |
+| Item                               | Deviation                                                                             | Rationale                                                                                                             |
+| ---------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `SlugGenerator.Generate` signature | Uses `checkSlug` callback function instead of `ProductRepo` interface                 | Keeps domain service decoupled from the full repo interface; application service passes `repo.FindBySlug` as callback |
+| `Category` constructor             | Path is computed post-save (since ID is DB-assigned) rather than at construction time | ID is not known until after `Save`; path computation requires the ID                                                  |
+| `ProductFilter` struct             | Not in spec — added as a required parameter type for `ProductRepo.List`               | Needed to compile the repo interface; exact fields are a filtering concern                                            |
+| `ErrMediaNotFound`                 | Not in spec — added                                                                   | Needed for `RemoveImage` and `UploadImage` error paths                                                                |
+
+---
+
+## ADR Revision Log (2026-09-07)
+
+The initial plan was generated reading `adr-archived.md` (legacy) instead of the individual reviewed ADR files (ADR001–ADR009). The following corrections were applied:
+
+| ADR     | Change Applied                                                                                                  |
+| ------- | --------------------------------------------------------------------------------------------------------------- |
+| All     | Added Step 0 instruction to read ADR001–ADR009 individually; explicit `adr-archived.md` exclusion               |
+| ADR-001 | Added note: category `attrs` define attribute specifications inherited by products (filtering)                  |
+| ADR-002 | Added convention #13: media URIs use relative paths or direct URLs, no `file:///` prefix                        |
+| ADR-003 | Added `parentId *CatId`, `depth int`, `sortOrder int` to Category entity; `SetPath()`, `SetSortOrder()` methods |
+| ADR-003 | Updated `CatNode` to include `Parent *CatNode` link alongside `Children`; updated `BuildCatTree` algorithm      |
+| ADR-003 | Added tests: `TestCategory_SetPath`, `TestCategory_SetSortOrder`, child depth test, parent-link tree tests      |
+| ADR-004 | Added convention #12: money values in configured least minor units (cents/paise), no floating-point             |

@@ -21,6 +21,7 @@ Now first perform the `before plan` phase. If succeded move to `commit plan` pha
   - If exist: Load the conventions and use them for instructions.
   - If not exist: Create a one at the end of the skill execute.
 - Definition: We call `.agents/specs/{bc}/domain-model.md` as the *domain spec* for a given bc
+- **Do NOT** read `adr-archived.md` file. This file should be splitted to multiple ADR files by now and reviewed. Therefore, this file is now obsolete. Maintained for legacy reasons.
 - Load the bounded context: read *domain spec* with `adr*.md` files and `.agents/discover/context-map.md` for cross-context relationships. 
   - If *domain spec* doesn't exist:
     - ask the user to run the `bcdiscovery` and `compilespec` skills before calling this skill and stop.
