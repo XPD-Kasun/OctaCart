@@ -25,7 +25,7 @@ jobs:
         
 
       - name: List Dir
-        run: ls ./bin -la
+        run: tree ./bin
         
       - name: Test
         run: go test ./...
