@@ -5,7 +5,7 @@ name: Go
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "github-actions-setup" ]
   pull_request:
     branches: [ "main" ]
 
