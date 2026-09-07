@@ -96,8 +96,8 @@ The file `internal/product/product.go` already exists with a **placeholder** `Pr
 
 ### 1.2 — Shared Type Tests
 
-- [ ] Create `internal/shared/types_test.go`
-- [ ] Test `Pagination.Offset()`:
+- [x] Create `internal/shared/types_test.go`
+- [x] Test `Pagination.Offset()`:
   - `Page=1, PerPage=10` → Offset = 0
   - `Page=3, PerPage=20` → Offset = 40
   - `Page=1, PerPage=1` → Offset = 0
@@ -106,11 +106,11 @@ The file `internal/product/product.go` already exists with a **placeholder** `Pr
 
 ### 1.3 — Shared Type Implementation Verification
 
-- [ ] The `Pagination` struct and `Offset()` method should already be implemented from 1.1. Verify tests pass.
-- [ ] Run: `go test ./internal/shared/...`
+- [x] The `Pagination` struct and `Offset()` method should already be implemented from 1.1. Verify tests pass.
+- [x] Run: `go test ./internal/shared/...`
 
 **>>> STOP. Tell the user: "Phase 1 complete: shared types. Next item: Product BC Value Types." Wait for user to say "proceed".**
-
+Reviewed: 2026-09-07
 ---
 
 ## Phase 2: Value Types
