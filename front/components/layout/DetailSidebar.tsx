@@ -93,7 +93,7 @@ export function RightPanel({ open, onClose }: RightPanelProps) {
             aria-label="Details panel"
         >
             {/* Panel header */}
-            <div className="flex items-center justify-between border-b px-4 py-3">
+            <div className="flex items-center justify-between border-b px-4 py-2">
                 <div className="flex items-center gap-2">
                     <Activity className="size-4 text-muted-foreground" />
                     <span className="text-sm font-semibold">Activity</span>

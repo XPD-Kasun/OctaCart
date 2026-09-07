@@ -45,7 +45,7 @@ export function AppHeader({
                     <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
                         placeholder="Search…"
-                        className="h-7 w-56 rounded-lg pl-8 text-xs"
+                        className="h-7 w-56 rounded-lg pl-8 text-sm"
                     />
                 </div>
 

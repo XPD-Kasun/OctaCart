@@ -13,7 +13,7 @@
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
-      "version": "^11.9.0",
+      "version": "^12.0.0",
       "onFail": "download"
     }
   },
@@ -36,6 +36,6 @@
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "26.4.0",
     "@types/react": "19.2.18",
-    "typescript": "7.0.2"
+    "typescript": "^5.8.2"
   }
 }

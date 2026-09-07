@@ -16,6 +16,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
     DropdownMenu,
     DropdownMenuContent,
+    DropdownMenuGroup,
     DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuSeparator,
@@ -34,6 +35,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem
 } from '@/components/ui/sidebar';
+import { useState } from 'react';
 
 const navMain = [
     {
@@ -59,6 +61,16 @@ const navMain = [
 ]
 
 export function AppSidebar() {
+
+    let [selectedNav, setSelectedNav] = useState('Dashboard');
+
+    const onMenuSelected = (item) => {
+        if (selectedNav != item.title) {
+            setSelectedNav(item.title)
+        }
+    };
+
+
     return (
         <Sidebar collapsible="icon" variant='inset'>
             <SidebarHeader>
@@ -80,7 +92,7 @@ export function AppSidebar() {
                     <SidebarInput
                         id="sidebar-search"
                         placeholder="Search…"
-                        className="bg-background"
+                        className="bg-background border-1 border-sidebar-border"
                     />
                     <span className="sr-only">
                         <Search />
@@ -97,8 +109,10 @@ export function AppSidebar() {
                                 {group.items.map((item) => (
                                     <SidebarMenuItem key={item.title}>
                                         <SidebarMenuButton
-                                            isActive={item.active === true}
+                                            variant={item.title == selectedNav ? "outline" : "default"}
+                                            isActive={item.title == selectedNav}
                                             tooltip={item.title}
+                                            onClick={e => onMenuSelected(item)}
                                         >
                                             {item.icon && <item.icon className="size-4" />}
                                             <span>{item.title}</span>
@@ -119,7 +133,7 @@ export function AppSidebar() {
                                 render={
                                     <SidebarMenuButton
                                         size="lg"
-                                        className="bg-muted data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                                        className="sidebar-btn"
                                     />
                                 }
                             >
@@ -135,26 +149,28 @@ export function AppSidebar() {
                                 <ChevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
                             </DropdownMenuTrigger>
                             <DropdownMenuContent
-                                className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+                                className="w-[--radix-dropdown-menu-trigger-width] min-w-52 rounded-lg"
                                 side="bottom"
                                 align="end"
                                 sideOffset={4}
                             >
-                                <DropdownMenuLabel className="p-0 font-normal">
-                                    <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                                        <Avatar className="size-8 rounded-lg">
-                                            <AvatarFallback className="rounded-lg">MK</AvatarFallback>
-                                        </Avatar>
-                                        <div className="grid flex-1 text-left text-sm leading-tight">
-                                            <span className="truncate font-semibold">
-                                                Mira Kapoor
-                                            </span>
-                                            <span className="truncate text-xs text-muted-foreground">
-                                                mira@acme.io
-                                            </span>
+                                <DropdownMenuGroup>
+                                    <DropdownMenuLabel className="p-0 font-normal" >
+                                        <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+                                            <Avatar className="size-8 rounded-lg">
+                                                <AvatarFallback className="rounded-lg">MK</AvatarFallback>
+                                            </Avatar>
+                                            <div className="grid flex-1 text-left text-sm leading-tight">
+                                                <span className="truncate font-semibold">
+                                                    Mira Kapoor
+                                                </span>
+                                                <span className="truncate text-xs text-muted-foreground">
+                                                    mira@acme.io
+                                                </span>
+                                            </div>
                                         </div>
-                                    </div>
-                                </DropdownMenuLabel>
+                                    </DropdownMenuLabel>
+                                </DropdownMenuGroup>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem>Account</DropdownMenuItem>
                                 <DropdownMenuItem>Billing</DropdownMenuItem>

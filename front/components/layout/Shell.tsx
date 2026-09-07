@@ -54,7 +54,7 @@ export function AdminShell({
       */}
             <div className="relative flex h-svh flex-1 flex-col overflow-hidden">
                 {/* Inner padded frame that holds the elevated main panel + right panel */}
-                <div className="flex h-full min-h-0 flex-1 gap-4 p-3 md:p-4">
+                <div className="flex h-full min-h-0 flex-1 gap-4 p-3 md:p-4 md:pl-0">
                     {/* ── Elevated main panel ─────────────────────────────────────── */}
                     {/* Elevated main panel — border only, no shadow (per request) */}
                     <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border bg-card">
