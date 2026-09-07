@@ -28,9 +28,6 @@ jobs:
         cache: true
         cache-dependency-path: 'backend/go.sum'
 
-    - name: Install dependencies
-      run: go mod download
-      
     - name: Build
       run: go build -v -o octacart ./...
 
