@@ -21,7 +21,7 @@ jobs:
           cache-dependency-path: './backend/go.sum'
 
       - name: Build
-        run: go run -o ./bin/ ./...
+        run: go build -o ./bin/ ./...
         
 
       - name: List Dir
