@@ -28,8 +28,18 @@ func (p Pagination) Offset() int {
 	return (p.Page - 1) * p.PerPage
 }
 
+type ActorType string
+
+const (
+	Customer   ActorType = "Cust"
+	Staff      ActorType = "Staff"
+	SuperAdmin ActorType = "SuperAd"
+	Merchant   ActorType = "Merch"
+)
+
 type DomainEvent interface {
 	EventName() string
 	OccurredAt() time.Time
 	ActorId() UserId
+	ActorType() ActorType
 }

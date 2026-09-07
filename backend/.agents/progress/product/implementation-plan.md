@@ -90,6 +90,7 @@ The file `internal/product/product.go` already exists with a **placeholder** `Pr
   - `OccurredAt() time.Time` — returns when the event occurred
   - `ActorId() shared.UserId` — returns the admin/user who triggered the event (audit trail)
 - [x] Do NOT remove existing types (`Money`, `KV`, `UserId`, `Claim`)
+- [x] Reviewed(2026-09-07): Added ActorType for differentiating the actor. This becomes part of the domain event iface.
 
 **>>> STOP. Tell the user: "Phase 1.1 complete: shared types structs. Ready for review." Wait for the user to say "proceed".**
 
@@ -125,9 +126,9 @@ The file `internal/product/product.go` already exists with a **placeholder** `Pr
   - `type MediaId int`  
   **ProductStatus** (typed string enum):
   - `type ProductStatus string`
-  - Constants: `StatusDraft ProductStatus = "Draft"`, `StatusActive ProductStatus = "Active"`, `StatusArchived ProductStatus = "Archived"`
+  - Constants: `StatusDraft ProductStatus = "Draft"`, `StatusActive ProductStatus = "Active"`, `StatusArchived ProductStatus = "Archived"`  
   **Money**:
-  - `Money` is already `shared.Money` (`int64`) in the shared package. Use `shared.Money` throughout the product package. Do NOT redefine it.
+  - `Money` is already `shared.Money` (`int64`) in the shared package. Use `shared.Money` throughout the product package. Do NOT redefine it.  
   **Attributes** (ADR-001 — opaque dynamic attribute map):
   - Unexported helper: `type val struct { Type string; Value any }`
   - `type Attributes struct` with unexported field `attrs map[string]*val`
@@ -163,9 +164,10 @@ The file `internal/product/product.go` already exists with a **placeholder** `Pr
   - `"GetStr missing/should error"` — `GetStr("nope")` returns error
   - `"Remove/should delete"` — Add then Remove → `Has()` returns false
   - `"Names/should return sorted"` — Add `"Z"`, `"A"`, `"M"` → `Names()` returns `["A","M","Z"]`
-  - `"overwrite/should replace"` — `AddStr("X","a")` then `AddNum("X",1)` → `GetNum("X")` works, `GetStr("X")` errors
+  - `"overwrite/should replace"` — `AddStr("X","a")` then `AddNum("X",1)` → `GetNum("X")` works, `GetStr("X")` errors  
   **TestProductStatus constants**:
   - Verify `StatusDraft`, `StatusActive`, `StatusArchived` have correct string values
+
 ### 2.3 — Value Type Implementation & Test Run
 
 - [ ] Implementations should already exist from 2.1. Make any adjustments needed to pass the tests.
@@ -465,7 +467,7 @@ All entities go in `internal/product/product.go` (append after value types).
 - [ ] `type VariantPriceChangedEvent struct`:
   - `VariantId ProVariantId`, `OldPrice shared.Money`, `NewPrice shared.Money`, `actorId shared.UserId`, `occurredAt time.Time`
 
-All events implement `shared.DomainEvent` interface. The `actorId` is extracted from `ctx` (via `shared.Claim`) by the app service before constructing the event.
+All events implement `shared.DomainEvent` interface. The `actorId`  and `actorType` is extracted from `ctx` (via `shared.Claim`) by the app service before constructing the event.
 
 **>>> STOP. Tell the user: "Phase 5.1 complete: domain service structs and event types. Ready for review." Wait for the user to say "proceed".**
 
