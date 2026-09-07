@@ -1,3 +1,4 @@
+name: Test GO
 on:
   push:
     branches: ["github-actions-setup"]
@@ -16,6 +17,12 @@ jobs:
         uses: actions/setup-go@v7.0.0
         with:
           go-version-file: './backend/go.mod'
+
+      - name: Build
+        run: go run -o ./bin/ ./...
+
+      - name: List Dir
+        run: ls ./bin -la
         
       - name: Test
         run: go test ./...
