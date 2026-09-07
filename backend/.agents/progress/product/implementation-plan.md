@@ -117,8 +117,8 @@ Reviewed: 2026-09-07
 
 ### 2.1 — Value Type Structs
 
-- [ ] Create (or replace entirely) `internal/product/product.go` with the file header and package doc comment.
-- [ ] Define the following value types in `product.go`:
+- [x] Create (or replace entirely) `internal/product/product.go` with the file header and package doc comment.
+- [x] Define the following value types in `product.go`:
   **ID types** (type aliases — ADR-003 uses `int64`):
   - `type ProId int`
   - `type ProVariantId int`
@@ -151,10 +151,10 @@ Reviewed: 2026-09-07
 
 **>>> STOP. Tell the user: "Phase 2.1 complete: value type structs and constructors. Ready for review." Wait for the user to say "proceed".**
 
-### 2.2 — Value Type Tests
+#### 2.2 — Value Type Tests
 
-- [ ] Create `internal/product/product_test.go` with file header
-- [ ] Write tests for:
+- [x] Create `internal/product/product_test.go` with file header
+- [x] Write tests for:
   **TestAttributes**:
   - `"new/should be empty"` — `NewAttributes().Names()` → empty slice
   - `"AddStr and GetStr"` — `AddStr("Color","Red")` → `GetStr("Color")` returns `"Red"`, nil
@@ -164,14 +164,13 @@ Reviewed: 2026-09-07
   - `"GetStr missing/should error"` — `GetStr("nope")` returns error
   - `"Remove/should delete"` — Add then Remove → `Has()` returns false
   - `"Names/should return sorted"` — Add `"Z"`, `"A"`, `"M"` → `Names()` returns `["A","M","Z"]`
-  - `"overwrite/should replace"` — `AddStr("X","a")` then `AddNum("X",1)` → `GetNum("X")` works, `GetStr("X")` errors  
+  - `"overwrite/should replace"` — `AddStr("X","a")` then `AddNum("X",1)` → `GetNum("X")` works, `GetStr("X")` errors
   **TestProductStatus constants**:
   - Verify `StatusDraft`, `StatusActive`, `StatusArchived` have correct string values
-
 ### 2.3 — Value Type Implementation & Test Run
 
-- [ ] Implementations should already exist from 2.1. Make any adjustments needed to pass the tests.
-- [ ] Run: `go test ./internal/product/...`
+- [x] Implementations should already exist from 2.1. Make any adjustments needed to pass the tests.
+- [x] Run: `go test ./internal/product/...`
 
 **>>> STOP. Tell the user: "Phase 2 complete: value types. Next item: Entities." Wait for user to say "proceed".**
 
