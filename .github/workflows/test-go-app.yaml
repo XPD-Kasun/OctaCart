@@ -17,9 +17,12 @@ jobs:
         uses: actions/setup-go@v7.0.0
         with:
           go-version-file: './backend/go.mod'
+          cache: true
+          cache-dependency-path: './backend/go.sum'
 
       - name: Build
         run: go run -o ./bin/ ./...
+        
 
       - name: List Dir
         run: ls ./bin -la
