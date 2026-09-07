@@ -1,0 +1,18 @@
+on:
+  push:
+    branches: ["github-actions-setup"]
+jobs:
+  test-app:    
+    runs-on: ubuntu-slim
+    defaults:
+      run:
+        working-directory: ./backend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Install Go
+        uses: actions/setup-go@v7.0.0
+      - name: Test
+        run: go test ./...
+        
+  
