@@ -60,7 +60,7 @@ jobs:
       - name: Test Nextjs frontend
         run: pnpm run test
 
-      - name: Upload Build Dist
+      - name: Upload Build Dists
         uses: actions/upload-artifact@v7
         with:
           name: Nextjs-App
