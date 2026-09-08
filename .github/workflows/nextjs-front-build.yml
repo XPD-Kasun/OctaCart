@@ -35,13 +35,15 @@ jobs:
           cache: true
           version: ^12.0.0
           working-directory: ./front
-          install: true
-          require-lockfile: true
+          install: false
+
+      - name: Install pnpm dependencies
+        run: pnpm install --frozen-lockfile --shamefully-hoist
           
       - name: Restore cache
         uses: actions/cache@v6
         with:
-          path: ${{ github.workspace }}/frontend/.next/cache
+          path: ${{ github.workspace }}/front/.next/cache
           # Generate a new cache whenever packages or source files change.
           key:  ${{ runner.os }}-nextjs-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('**.[jt]s', '**.[jt]sx') }}
           # If source files changed but packages didn't, rebuild from a prior cache.
