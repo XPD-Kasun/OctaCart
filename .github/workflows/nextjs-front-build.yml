@@ -53,8 +53,6 @@ jobs:
             
       - name: SSH
         uses: mxschmitt/action-tmate@v3
-        with:
-          sudo: false
 
       - name: Test Nextjs frontend
         run: pnpm run test
