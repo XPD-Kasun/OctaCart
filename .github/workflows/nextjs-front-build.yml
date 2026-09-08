@@ -88,6 +88,7 @@ jobs:
         with:
           name: Nextjs-App
           path: ./front/dist-standalone
+          include-hidden-files: true
 
       - name: Download Build Artifacts
         uses: actions/download-artifact@v8
