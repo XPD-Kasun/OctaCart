@@ -4,7 +4,7 @@ name: Build Frontend NextApp
 on:
   # Runs on pushes targeting the default branch
   push:
-    branches: ["github-actions-setup"]
+    branches: ["main"]
   pull_request:
     branches: ["main"]
 
