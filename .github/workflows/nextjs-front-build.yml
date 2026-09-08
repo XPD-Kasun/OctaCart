@@ -54,7 +54,7 @@ jobs:
       - name: Test Nextjs frontend
         run: pnpm run test
 
-      - name: Prepare Standalone Deployment Directory
+      - name: Prepare Standalone Deployment Directory 
         run: |
           # 1. Copy the standalone bundle
           cp -r .next/standalone ./dist-standalone
