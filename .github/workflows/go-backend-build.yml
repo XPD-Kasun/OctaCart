@@ -28,6 +28,9 @@ jobs:
         cache: true
         cache-dependency-path: 'backend/go.sum'
 
+    - name: go vet
+      run: go vet ./...
+
     - name: Build
       run: go build -v -o ./bin/ ./...
 
