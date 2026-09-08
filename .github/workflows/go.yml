@@ -5,7 +5,7 @@ name: Go Build
 
 on:
   push:
-    branches: [ "github-actions-setup" ]
+    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 
