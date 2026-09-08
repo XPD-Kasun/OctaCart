@@ -4,7 +4,8 @@
  * @type {import('next').NextConfig}
  */
 const nextConfig = {
-    output: 'standalone'
+    output: 'standalone',
+    transpilePackages: ['@swc/helpers'],
     /* config options here */
 }
 
