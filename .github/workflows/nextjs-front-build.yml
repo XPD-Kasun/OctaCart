@@ -80,7 +80,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: Nextjs-App
-          path: ./dist-standalone
+          path: ./front/dist-standalone
 
       - name: Download Build Artifacts
         uses: actions/download-artifact@v8
