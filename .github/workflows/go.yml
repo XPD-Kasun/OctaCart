@@ -5,7 +5,7 @@ name: Go Build
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "github-actions-setup" ]
   pull_request:
     branches: [ "main" ]
 
@@ -36,3 +36,7 @@ jobs:
 
     - name: Test
       run: go test -v ./...
+
+    - name: Download Artifacts
+      uses: actions/download-artifact@v3.1.0
+        
