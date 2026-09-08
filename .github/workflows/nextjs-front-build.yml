@@ -54,14 +54,27 @@ jobs:
       - name: Test Nextjs frontend
         run: pnpm run test
 
+      - name: Prepare Standalone Deployment Directory
+        run: |
+          # 1. Copy the standalone bundle
+          cp -r .next/standalone ./dist-standalone
+          
+          # 2. Copy static files & public
+          mkdir -p ./dist-standalone/.next/static
+          cp -r .next/static/* ./dist-standalone/.next/static/
+          if [ -d "public" ]; then
+            cp -r public ./dist-standalone/public
+          fi
+
+          # 3. FIX: Copy missing @swc/helpers into the standalone node_modules
+          mkdir -p ./dist-standalone/node_modules/@swc
+          cp -r node_modules/@swc/helpers ./dist-standalone/node_modules/@swc/
+
       - name: Upload Build Dists
         uses: actions/upload-artifact@v7
         with:
           name: Nextjs-App
-          path: |
-            ./front/.next/standalone
-            ./front/.next/static
-            ./front/public
+          path: ./dist-standalone
 
       - name: Download Build Artifacts
         uses: actions/download-artifact@v8
