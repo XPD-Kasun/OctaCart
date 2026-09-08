@@ -55,9 +55,9 @@ jobs:
         with:
           name: Nextjs-App
           path: |
-            ./frontend/.next/standalone
-            ./frontend/.next/static
-            ./frontend/public
+            .next/standalone
+            .next/static
+            public
 
       - name: Download Build Artifacts
         uses: actions/download-artifact@v8
