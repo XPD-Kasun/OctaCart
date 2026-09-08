@@ -31,6 +31,12 @@ jobs:
     - name: Build
       run: go build -v -o ./bin/ ./...
 
+    - name: Upload Build Executables
+      uses: actions/upload-artifact@v7
+      with:
+        name: Octacart-Binaries
+        path: ./backend/bin
+
     - name: Output Build Files
       run: ls ./bin -la
 
@@ -39,4 +45,7 @@ jobs:
 
     - name: Download Artifacts
       uses: actions/download-artifact@v8
+      with:
+        name: Octacart-Binaries
+        path: ./backend/artifacts
         
