@@ -67,6 +67,7 @@ jobs:
           fi
 
           # 3. FIX: Copy missing @swc/helpers into the standalone node_modules
+          ls node_modules
           mkdir -p ./dist-standalone/node_modules/@swc
           cp -r node_modules/@swc/helpers ./dist-standalone/node_modules/@swc/
 
