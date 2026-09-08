@@ -1,5 +1,5 @@
 # Build and test front-end merchant app
-name: Build Frontend
+name: Build Frontend NextApp
 
 on:
   # Runs on pushes targeting the default branch
