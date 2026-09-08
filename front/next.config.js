@@ -4,10 +4,7 @@
  * @type {import('next').NextConfig}
  */
 const nextConfig = {
-    experimental: {
-        turbotrace: {}
-    },
-    output: standalone
+    output: 'standalone'
     /* config options here */
 }
 
