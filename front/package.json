@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "npmlock": "node scripts/sync-npm-lock.cjs",
     "test": "echo \"Error: no test specified\" && exit 0",
     "dev": "next dev",
     "build": "next build"
@@ -12,11 +13,18 @@
   "author": "",
   "license": "ISC",
   "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "^12.0.0",
-      "onFail": "download"
-    }
+    "packageManager": [
+      {
+        "name": "pnpm",
+        "version": "^12.0.0",
+        "onFail": "download"
+      },
+      {
+        "name": "npm",
+        "version": ">=10.0.0",
+        "onFail": "warn"
+      }
+    ]
   },
   "type": "module",
   "dependencies": {

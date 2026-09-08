@@ -35,6 +35,16 @@ jobs:
           cache: npm
           cache-dependency-path: front/package-lock.json
 
+      - name: Verify package-lock.json is in sync with package.json
+        run: |
+          npm install --package-lock-only
+          if ! git diff --quiet -- package-lock.json; then
+            echo "Error > package-lock.json is out of date. Run 'npm install --package-lock-only' in ./front and commit the result."
+            git diff -- package-lock.json
+            exit 1
+          fi
+
+
       - name: Install npm dependencies
         run: npm ci
 
