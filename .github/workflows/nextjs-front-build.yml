@@ -49,3 +49,20 @@ jobs:
 
       - name: Test Nextjs frontend
         run: pnpm run test
+
+      - name: Upload Build Dist
+        uses: actions/upload-artifact@v7
+        with:
+          name: Nextjs-App
+          path: |
+            ./frontend/.next/standalone
+            ./frontend/.next/static
+            ./frontend/public
+
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: Nextjs-App
+          path: ./frontend/artifacts
+            
+        
