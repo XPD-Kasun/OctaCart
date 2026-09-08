@@ -49,10 +49,7 @@ jobs:
             ${{ runner.os }}-nextjs-${{ hashFiles('**/pnpm-lock.yaml') }}-
         
       - name: Build with Next.js
-        run: pnpm run build
-            
-      - name: Setup upterm session
-        uses: owenthereal/action-upterm@v1
+        run: pnpm run build            
 
       - name: Test Nextjs frontend
         run: pnpm run test
@@ -62,13 +59,13 @@ jobs:
         with:
           name: Nextjs-App
           path: |
-            ./frontend/.next/standalone
-            ./frontend/.next/static
-            ./frontend/public
+            ./front/.next/standalone
+            ./front/.next/static
+            ./front/public
 
       - name: Download Build Artifacts
         uses: actions/download-artifact@v8
         with:
           name: Nextjs-App
-          path: ./frontend/artifacts
+          path: ./front/artifacts
         
