@@ -178,25 +178,25 @@ Reviewed: 2026-09-07
 
 ## Phase 3: Entities
 
-### 3.1 — Entity Structs
+#### 3.1 — Entity Structs
 
 All entities go in `internal/product/product.go` (append after value types).
 
 **Product** (Aggregate Root):
 
-- [ ] Struct with unexported fields matching the spec: `id ProId`, `title string`, `slug string`, `description string`, `status ProductStatus`, `categoryId CatId`, `tags []string`, `isDigital bool`, `createdAt time.Time`, `updatedAt time.Time`
-- [ ] Public getters for all fields: `Id()`, `Title()`, `Slug()`, `Description()`,`SKU()`, `Status()`, `CategoryId()`, `Tags()`, `IsDigital()`, `CreatedAt()`, `UpdatedAt()`
-- [ ] Constructor: `NewProduct(title, description string, categoryId CatId, isDigital bool, tags []string) (*Product, error)`:
+- [x] Struct with unexported fields matching the spec: `id ProId`, `title string`, `slug string`, `description string`, `status ProductStatus`, `categoryId CatId`, `tags []string`, `isDigital bool`, `createdAt time.Time`, `updatedAt time.Time`
+- [x] Public getters for all fields: `Id()`, `Title()`, `Slug()`, `Description()`,`SKU()`, `Status()`, `CategoryId()`, `Tags()`, `IsDigital()`, `CreatedAt()`, `UpdatedAt()`
+- [x] Constructor: `NewProduct(title, description string, categoryId CatId, isDigital bool, tags []string) (*Product, error)`:
   - Sets `status` to `StatusDraft`
   - Sets `createdAt` and `updatedAt` to `time.Now()`
   - Validates that `title` is not empty (return error if so)
   - `id` is left as zero value (DB will assign)
   - `slug` is left empty (SlugGenerator will assign before save)
-- [ ] Domain method: `Publish() error` — transitions Draft → Active. Returns `ErrInvalidTransition` otherwise.
-- [ ] Domain method: `Archive() error` — transitions Active → Archived. Returns `ErrInvalidTransition` otherwise.
-- [ ] Domain method: `SetSlug(slug string)` — sets the slug field.
-- [ ] Domain method: `Update(cmd UpdateProductCmd)` — updates mutable fields from the command struct. Refreshes `updatedAt`.
-- [ ] Command struct `UpdateProductCmd`:
+- [x] Domain method: `Publish() error` — transitions Draft → Active. Returns `ErrInvalidTransition` otherwise.
+- [x] Domain method: `Archive() error` — transitions Active → Archived. Returns `ErrInvalidTransition` otherwise.
+- [x] Domain method: `SetSlug(slug string)` — sets the slug field.
+- [x] Domain method: `Update(cmd UpdateProductCmd)` — updates mutable fields from the command struct. Refreshes `updatedAt`.
+- [x] Command struct `UpdateProductCmd`:
   - `Title *string` (optional — pointer means "if non-nil, update")
   - `Description *string`
   - `CategoryId *CatId`
@@ -205,130 +205,130 @@ All entities go in `internal/product/product.go` (append after value types).
 
 **ProductVariant**:
 
-- [ ] Struct with unexported fields: `id ProVariantId`, `productId ProId`, `sku string`, `price shared.Money`, `compareAtPrice *shared.Money` (pointer for nullable), `stockQty int`, `attrs *Attributes`, `mediaId *MediaId` (pointer for nullable)
-- [ ] Public getters for all fields
-- [ ] Constructor: `NewProductVariant(productId ProId, sku string, price shared.Money, attrs *Attributes) (*ProductVariant, error)`:
+- [x] Struct with unexported fields: `id ProVariantId`, `productId ProId`, `sku string`, `price shared.Money`, `compareAtPrice *shared.Money` (pointer for nullable), `stockQty int`, `attrs *Attributes`, `mediaId *MediaId` (pointer for nullable)
+- [x] Public getters for all fields
+- [x] Constructor: `NewProductVariant(productId ProId, sku string, price shared.Money, attrs *Attributes) (*ProductVariant, error)`:
   - Validates `sku` is not empty
   - Validates `price >= 0`
   - Sets `stockQty` to 0
   - `id` is left as zero value (DB assigns)
-- [ ] Domain method: `AdjustStock(delta int) error` — adds delta to stockQty; returns `ErrInsufficientStock` if result < 0
-- [ ] Domain method: `Update(cmd UpdateVariantCmd)` — updates mutable fields from command struct
-- [ ] Command struct `UpdateVariantCmd`:
+- [x] Domain method: `AdjustStock(delta int) error` — adds delta to stockQty; returns `ErrInsufficientStock` if result < 0
+- [x] Domain method: `Update(cmd UpdateVariantCmd)` — updates mutable fields from command struct
+- [x] Command struct `UpdateVariantCmd`:
   - `SKU *string`
   - `Price *shared.Money`
   - `CompareAtPrice **shared.Money` (double pointer: outer nil = "don't touch", inner nil = "set to null")
   - `Attrs *Attributes`
   - `MediaId **MediaId`
-- [ ] Helper to check if price changed: `SetPrice(newPrice shared.Money) (oldPrice shared.Money, changed bool)` — sets price and returns old + whether it changed
+- [x] Helper to check if price changed: `SetPrice(newPrice shared.Money) (oldPrice shared.Money, changed bool)` — sets price and returns old + whether it changed
 
 **Category**:
 
-- [ ] Struct with unexported fields: `id CatId`, `name string`, `slug string`, `parentId *CatId` (nullable for root — ADR-003), `path string`, `depth int` (ADR-003), `sortOrder int` (ADR-003), `attrs *Attributes`
-- [ ] Public getters for all fields: `Id()`, `Name()`, `Slug()`, `ParentId()`, `Path()`, `Depth()`, `SortOrder()`, `Attrs()`
-- [ ] Constructor: `NewCategory(name, slug string, parentPath string, parentId *CatId) (*Category, error)`:
+- [x] Struct with unexported fields: `id CatId`, `name string`, `slug string`, `parentId *CatId` (nullable for root — ADR-003), `path string`, `depth int` (ADR-003), `sortOrder int` (ADR-003), `attrs *Attributes`
+- [x] Public getters for all fields: `Id()`, `Name()`, `Slug()`, `ParentId()`, `Path()`, `Depth()`, `SortOrder()`, `Attrs()`
+- [x] Constructor: `NewCategory(name, slug string, parentPath string, parentId *CatId) (*Category, error)`:
   - Validates `name` is not empty
   - Computes `depth` from `parentPath`: if empty → depth=0 (root); else depth = count dots in parentPath + 1
   - `path` is set to empty at construction (computed post-save when ID is known — see Spec Deviations)
   - Sets `parentId` to the given parent pointer (nil for root)
   - Sets `sortOrder` to 0 (caller/service can adjust)
   - Sets `attrs` to `NewAttributes()` (empty)
-- [ ] Domain method: `Update(cmd UpdateCatCmd)` — updates mutable fields
-- [ ] Domain method: `SetPath(path string)` — sets the path after DB assigns the ID
-- [ ] Domain method: `SetSortOrder(order int)` — sets sort order
-- [ ] Command struct `UpdateCatCmd`: `Name *string`, `Slug *string`, `Attrs *Attributes`
+- [x] Domain method: `Update(cmd UpdateCatCmd)` — updates mutable fields
+- [x] Domain method: `SetPath(path string)` — sets the path after DB assigns the ID
+- [x] Domain method: `SetSortOrder(order int)` — sets sort order
+- [x] Command struct `UpdateCatCmd`: `Name *string`, `Slug *string`, `Attrs *Attributes`
 
 > **Note (ADR-003)**: `depth` and `parentId` can also be derived from `path`, but storing them enables efficient queries without parsing. `sortOrder` controls sibling display order in category menus.
 
 **CatNode** (tree helper, per ADR-003):
 
-- [ ] `type CatNode struct` with exported fields: `Cat Category`, `Parent *CatNode` (ADR-003 algorithm), `Children []*CatNode`
-- [ ] Function `BuildCatTree(cats []Category) []*CatNode` — converts a flat list of categories into a tree. Use the algorithm from ADR-003: build a cache map, link each node to its parent via `parentId`, and collect children. Returns root nodes (those with nil parent).
+- [x] `type CatNode struct` with exported fields: `Cat Category`, `Parent *CatNode` (ADR-003 algorithm), `Children []*CatNode`
+- [x] Function `BuildCatTree(cats []Category) []*CatNode` — converts a flat list of categories into a tree. Use the algorithm from ADR-003: build a cache map, link each node to its parent via `parentId`, and collect children. Returns root nodes (those with nil parent).
 
 **ProductMedia**:
 
-- [ ] Struct with unexported fields: `id MediaId`, `productId ProId`, `uri string`, `altText string`, `order int`
-- [ ] Public getters for all fields
-- [ ] Constructor: `NewProductMedia(productId ProId, uri, altText string, order int) *ProductMedia`
+- [x] Struct with unexported fields: `id MediaId`, `productId ProId`, `uri string`, `altText string`, `order int`
+- [x] Public getters for all fields
+- [x] Constructor: `NewProductMedia(productId ProId, uri, altText string, order int) *ProductMedia`
   - **Note (ADR-002)**: `uri` must be a relative path or direct URL. Never use `file:///` prefix. The `ImageStore.Store` adapter returns paths in this format.
 
 **>>> STOP. Tell the user: "Phase 3.1 complete: entity structs. Ready for review." Wait for the user to say "proceed".**
 
 ### 3.2 — Entity Tests
 
-- [ ] Add to `internal/product/product_test.go`:
+- [x] Add to `internal/product/product_test.go`:
 
 **TestNewProduct**:
 
-- `"valid input/should create draft product"` — verify status=Draft, title set, createdAt not zero
-- `"empty title/should return error"` — verify error returned
+- [x] `"valid input/should create draft product"` — verify status=Draft, title set, createdAt not zero
+- [x] `"empty title/should return error"` — verify error returned
 
 **TestProduct_Publish**:
 
-- `"draft product/should transition to active"` — NewProduct → Publish → status=Active
-- `"active product/should return ErrInvalidTransition"` — NewProduct → Publish → Publish → error
-- `"archived product/should return ErrInvalidTransition"` — NewProduct → Publish → Archive → Publish → error
+- [x] `"draft product/should transition to active"` — NewProduct → Publish → status=Active
+- [x] `"active product/should return ErrInvalidTransition"` — NewProduct → Publish → Publish → error
+- [x] `"archived product/should return ErrInvalidTransition"` — NewProduct → Publish → Archive → Publish → error
 
 **TestProduct_Archive**:
 
-- `"active product/should transition to archived"` — NewProduct → Publish → Archive → status=Archived
-- `"draft product/should return ErrInvalidTransition"` — NewProduct → Archive → error
+- [x] `"active product/should transition to archived"` — NewProduct → Publish → Archive → status=Archived
+- [x] `"draft product/should return ErrInvalidTransition"` — NewProduct → Archive → error
 
 **TestProduct_Update**:
 
-- `"update title/should set title and refresh updatedAt"` — create, sleep briefly, update with Title ptr, verify new title and updatedAt changed
-- `"nil fields/should not change"` — create, update with all-nil UpdateProductCmd, verify nothing changed
+- [x] `"update title/should set title and refresh updatedAt"` — create, sleep briefly, update with Title ptr, verify new title and updatedAt changed
+- [x] `"nil fields/should not change"` — create, update with all-nil UpdateProductCmd, verify nothing changed
 
 **TestProduct_SetSlug**:
 
-- `"should set slug"` — NewProduct → SetSlug("my-slug") → Slug() == "my-slug"
+- [x] `"should set slug"` — NewProduct → SetSlug("my-slug") → Slug() == "my-slug"
 
 **TestNewProductVariant**:
 
-- `"valid input/should create variant"` — verify sku, price, stockQty=0
-- `"empty sku/should return error"`
-- `"negative price/should return error"`
+- [x] `"valid input/should create variant"` — verify sku, price, stockQty=0
+- [x] `"empty sku/should return error"`
+- [x] `"negative price/should return error"`
 
 **TestProductVariant_AdjustStock**:
 
-- `"positive delta/should increase stock"` — start 0, adjust +10 → stockQty=10
-- `"negative delta within range/should decrease"` — stockQty=10, adjust -5 → stockQty=5
-- `"negative delta below zero/should return ErrInsufficientStock"` — stockQty=3, adjust -5 → error
+- [x] `"positive delta/should increase stock"` — start 0, adjust +10 → stockQty=10
+- [x] `"negative delta within range/should decrease"` — stockQty=10, adjust -5 → stockQty=5
+- [x] `"negative delta below zero/should return ErrInsufficientStock"` — stockQty=3, adjust -5 → error
 
 **TestProductVariant_SetPrice**:
 
-- `"changed price/should return old and true"` — price=100, SetPrice(200) → old=100, changed=true
-- `"same price/should return old and false"` — price=100, SetPrice(100) → old=100, changed=false
+- [x] `"changed price/should return old and true"` — price=100, SetPrice(200) → old=100, changed=true
+- [x] `"same price/should return old and false"` — price=100, SetPrice(100) → old=100, changed=false
 
 **TestNewCategory**:
 
-- `"valid input/should create category"` — verify name, slug, empty attrs, depth=0 for root, parentId=nil for root
-- `"child category/should compute depth from parent path"` — parentPath="1.2" → depth=2
-- `"empty name/should return error"`
+- [x] `"valid input/should create category"` — verify name, slug, empty attrs, depth=0 for root, parentId=nil for root
+- [x] `"child category/should compute depth from parent path"` — parentPath="1.2" → depth=2
+- [x] `"empty name/should return error"`
 
 **TestCategory_SetPath**:
 
-- `"should set path"` — NewCategory → SetPath("1.2.3") → Path() == "1.2.3"
+- [x] `"should set path"` — NewCategory → SetPath("1.2.3") → Path() == "1.2.3"
 
 **TestCategory_SetSortOrder**:
 
-- `"should set sort order"` — NewCategory → SetSortOrder(5) → SortOrder() == 5
+- [x] `"should set sort order"` — NewCategory → SetSortOrder(5) → SortOrder() == 5
 
 **TestBuildCatTree**:
 
-- `"flat list/should build correct hierarchy with parent links"` — Given categories with paths "1", "1.2", "1.3" → root has 2 children, each child's Parent points to root
-- `"single root/should have nil parent"` — verify root CatNode has Parent == nil
+- [x] `"flat list/should build correct hierarchy with parent links"` — Given categories with paths "1", "1.2", "1.3" → root has 2 children, each child's Parent points to root
+- [x] `"single root/should have nil parent"` — verify root CatNode has Parent == nil
 
 **TestNewProductMedia**:
 
-- `"should create media with all fields"` — verify uri, altText, order
+- [x] `"should create media with all fields"` — verify uri, altText, order
 
 **>>> STOP. Wait for user to say "proceed".**
 
 ### 3.3 — Entity Implementation & Test Run
 
-- [ ] Ensure all entity code from 3.1 is complete. Adjust to pass tests.
-- [ ] Run: `go test ./internal/product/...`
+- [x] Ensure all entity code from 3.1 is complete. Adjust to pass tests.
+- [x] Run: `go test ./internal/product/...`
 
 **>>> STOP. Tell the user: "Phase 3 complete: entities. Next item: Errors & Ports." Wait for user to say "proceed".**
 
