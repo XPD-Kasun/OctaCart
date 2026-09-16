@@ -36,15 +36,16 @@ One candidate context: **Shipping** — quoting/zoning, shipment lifecycle, carr
 
 ### Entities
 
-- **Shipment** — aggregate root. `id` (ShipmentId), `orderId`, `destinationAddress` (Address snapshot), `items []ShipmentItem {variantId, qty}`, `weight` (Weight), `methodId`, `carrierName`, `trackingNumber?`, `labelUri?`, `status` (ShipmentStatus), `createdAt/dispatchedAt/deliveredAt`
-- **ShippingMethod** — a purchasable delivery option. `id` (MethodId), `name`, `enabled`, `pricing` (RateRule)
-- **ShippingZone** — geographic grouping. `id` (ZoneId), `name`, `criteria []ZoneCriterion {country?, province?, postalPrefix?}`
-- **Carrier** — a configured delivery provider. `id` (CarrierId), `name`, `kind` (Manual | Integrated), `credentials?`
-- **Return** (RMA) — `id` (ReturnId), `shipmentId`, `reason`, `status` (Requested | Authorized | Received | Rejected)
+- **Shipment** — aggregate root. `id` (ShipmentId), `shopId` (ShopId), `orderId`, `destinationAddress` (Address snapshot), `items []ShipmentItem {variantId, qty}`, `weight` (Weight), `methodId`, `carrierName`, `trackingNumber?`, `labelUri?`, `status` (ShipmentStatus), `createdAt/dispatchedAt/deliveredAt`
+- **ShippingMethod** — a purchasable delivery option. `id` (MethodId), `shopId` (ShopId), `name`, `enabled`, `pricing` (RateRule)
+- **ShippingZone** — geographic grouping. `id` (ZoneId), `shopId` (ShopId), `name`, `criteria []ZoneCriterion {country?, province?, postalPrefix?}`
+- **Carrier** — a configured delivery provider. `id` (CarrierId), `shopId` (ShopId), `name`, `kind` (Manual | Integrated), `credentials?`
+- **Return** (RMA) — `id` (ReturnId), `shopId` (ShopId), `shipmentId`, `reason`, `status` (Requested | Authorized | Received | Rejected)
 
 ### Value Types
 
 - `ShipmentId`, `MethodId`, `ZoneId`, `CarrierId`, `ReturnId` — string (opaque, DB-generated)
+- `ShopId` — string (opaque; received from Auth JWT claim for admin ops, from OrderFulfilled event payload for fulfillment ops; not owned by this BC)
 - `Address` — `{name, line1, line2?, city, province, postalCode, country, phone}` — immutable snapshot on Shipment
 - `Weight` — int grams
 - `Money` — int64 minor units (single currency; matches Product BC)
@@ -55,7 +56,7 @@ One candidate context: **Shipping** — quoting/zoning, shipment lifecycle, carr
 ### Application Services
 
 - **RateSvc**
-  - `QuoteRates(ctx, quoteRequest{destinationAddress, items[]})` → `([]ShippingQuote, error)` — matches zones, applies rules
+  - `QuoteRates(ctx, shopId ShopId, quoteRequest{destinationAddress, items[]})` → `([]ShippingQuote, error)` — matches zones, applies rules
   - Errors: `ErrNoZoneMatched`, `ErrNoMethodsEnabled`
 - **ShipmentSvc**
   - `CreateShipment(ctx, orderData)` → `(*Shipment, error)` — snapshots address/items; requires fulfilled order
@@ -82,10 +83,10 @@ One candidate context: **Shipping** — quoting/zoning, shipment lifecycle, carr
 
 | Port | Methods |
 |---|---|
-| `ShipmentRepo` | `Save`, `FindById`, `FindByOrderId`, `FindByTrackingNumber`, `Update` |
-| `MethodRepo` / `ZoneRepo` / `CarrierRepo` | `Save`, `FindById`, `List`, `Delete` |
+| `ShipmentRepo` | `Save`, `FindById`, `FindByOrderId(ctx, orderId, shopId)`, `FindByTrackingNumber(ctx, trackingNumber, shopId)`, `Update` |
+| `MethodRepo` / `ZoneRepo` / `CarrierRepo` | `Save`, `FindById(ctx, id, shopId)`, `List(ctx, shopId)`, `Delete` |
 | `ReturnRepo` | `Save`, `FindById`, `FindByShipmentId`, `Update` |
-| `OrderPort` | `GetFulfilledOrder(ctx, orderId) → (destination, items, weights)` — read-only into Order BC |
+| `OrderPort` | `GetFulfilledOrder(ctx, shopId, orderId) → (destination, items, weights)` — read-only into Order BC |
 | `EventPublisher` | `Publish(ctx, event)` — in-process initially |
 | `CarrierGateway` | `BuyLabel(shipment) → uri`, `RegisterTracking(trackingNumber)` — ACL over external carriers |
 
@@ -136,7 +137,7 @@ One candidate context: **Shipping** — quoting/zoning, shipment lifecycle, carr
 
 ### Outbound
 
-- Events published: `ShipmentDispatched {shipmentId, orderId, trackingNumber}`, `ShipmentDelivered {shipmentId, orderId}`, `DeliveryFailed {shipmentId, orderId, reason}`, `ReturnReceived {returnId, orderId}` — consumers: Reporting, Order
+- Events published: `ShipmentDispatched {shopId, shipmentId, orderId, trackingNumber}`, `ShipmentDelivered {shopId, shipmentId, orderId}`, `DeliveryFailed {shopId, shipmentId, orderId, reason}`, `ReturnReceived {shopId, returnId, orderId}` — consumers: Reporting, Order
 - APIs exposed: `GET shippingMethods(destination)` (GraphQL, storefront), admin REST `/api/v1/shipping/{methods,zones,carriers,shipments,returns}`
 
 ### Dependencies
@@ -150,6 +151,8 @@ One candidate context: **Shipping** — quoting/zoning, shipment lifecycle, carr
 - `shipments` (+ embedded address/item snapshots)
 - `shipping_methods`, `shipping_zones`, `carriers`
 - `returns`
+
+> All tables are shopId-scoped; shipments, shipping_methods, shipping_zones, carriers, and returns all carry a shopId column.
 
 ### Validation (Step 7)
 
