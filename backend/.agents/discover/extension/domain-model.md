@@ -110,6 +110,7 @@
 
 - **Extension** — Aggregate root representing an installed plugin/extension.
   - `id` (ExtensionId)
+  - `shopId` (ShopId) — _Extensions are installed per-store._
   - `identifier` (string, unique slug e.g. `com.vendor.klaviyo`)
   - `name` (string)
   - `version` (string)
@@ -124,6 +125,7 @@
 - **WebhookSubscription** — Registered outbound event listeners.
   - `id` (WebhookId)
   - `extensionId` (ExtensionId)
+  - `shopId` (ShopId)
   - `eventTypes` ([]string)
   - `targetUrl` (string)
   - `secret` (string)
@@ -142,6 +144,7 @@
 ### Value Types
 
 - **ExtensionId**, **WebhookId**, **DeliveryId** — `string` (opaque unique identifier)
+- **ShopId** — string (opaque; received from Auth JWT claim for admin ops; not owned by Extension BC)
 - **ExtensionStatus** — enum: `Installed | Enabled | Disabled | Faulted`
 - **WebhookStatus** — enum: `Active | Paused | Disabled`
 - **HookPoint** — enum / string (e.g. `OrderValidate`, `RateCalculation`, `PostPayment`)
@@ -150,14 +153,14 @@
 ### Application Services
 
 - **ExtensionLifecycleSvc**
-  - `Install(ctx, manifest)` -> `(Extension, error)`
+  - `Install(ctx, shopId ShopId, manifest)` -> `(Extension, error)`
   - `Enable(ctx, extensionId)` -> `error`
   - `Disable(ctx, extensionId)` -> `error`
   - `Uninstall(ctx, extensionId)` -> `error`
   - `Configure(ctx, extensionId, configMap)` -> `error`
 - **WebhookSvc**
-  - `RegisterWebhook(ctx, cmd)` -> `(WebhookSubscription, error)`
-  - `DispatchEvent(ctx, eventType, eventPayload)` -> `error`
+  - `RegisterWebhook(ctx, shopId ShopId, cmd)` -> `(WebhookSubscription, error)`
+  - `DispatchEvent(ctx, shopId ShopId, eventType, eventPayload)` -> `error`
   - `RetryDelivery(ctx, deliveryId)` -> `error`
   - `ListDeliveries(ctx, webhookId, pagination)` -> `(DeliveryPage, error)`
 
@@ -226,9 +229,9 @@
 
 ### Data Owned
 
-- `extensions`
-- `extension_configs`
-- `webhook_subscriptions`
+- `extensions` — _includes shopId for per-store isolation._
+- `extension_configs` — _includes shopId for per-store isolation._
+- `webhook_subscriptions` — _includes shopId for per-store isolation._
 - `webhook_deliveries`
 
 ### Ambiguous Questions Needed From Architect

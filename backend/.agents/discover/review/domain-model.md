@@ -172,6 +172,7 @@ The Review BC supports the core purchasing experience (Product + Order) but is n
 | id | ReviewId | Opaque int, DB-generated |
 | productId | int | Reference to Product BC (foreign key only) |
 | customerId | shared.UserId | Reference to Customer BC (foreign key only) |
+| shopId | ShopId | Identifies the store this review belongs to; received from request context |
 | orderId | *int | Optional reference to Order BC; used for verified purchase tagging |
 | rating | int | 1-5 inclusive |
 | title | *string | Optional short headline |
@@ -202,6 +203,7 @@ The Review BC supports the core purchasing experience (Product + Order) but is n
 | ReviewVoteId | int | `type ReviewVoteId int` — opaque [deferred] |
 | ReviewStatus | string/iota | Submitted \| Published \| Rejected \| Withdrawn |
 | VoteKind | string/iota | Helpful \| NotHelpful [deferred] |
+| ShopId | string | Opaque; received from Auth JWT claim; not owned or validated by Review BC |
 | RatingSummary | struct | {ProductId int, AvgRating float64, TotalCount int, Distribution map[int]int} — read-only projection |
 | ReviewFilter | struct | {Status *ReviewStatus, VerifiedOnly bool, MinRating *int, MaxRating *int} |
 
@@ -211,7 +213,7 @@ The Review BC supports the core purchasing experience (Product + Order) but is n
 
 #### ReviewSvc
 ```
-SubmitReview(ctx, customerId shared.UserId, productId int, orderId *int, rating int, title *string, body string) -> (Review, error)
+SubmitReview(ctx, shopId ShopId, customerId shared.UserId, productId int, orderId *int, rating int, title *string, body string) -> (Review, error)
 ```
 - Validates rating ∈ [1,5] → ErrInvalidRating
 - Validates body non-empty → ErrBodyRequired
@@ -265,10 +267,10 @@ RemoveVote(ctx, reviewId ReviewId, customerId shared.UserId) -> error
 #### ReviewQuerySvc
 ```
 GetReview(ctx, reviewId ReviewId) -> (Review, error)
-ListReviewsByProduct(ctx, productId int, filter ReviewFilter, page shared.Pagination) -> ([]Review, error)
+ListReviewsByProduct(ctx, shopId ShopId, productId int, filter ReviewFilter, page shared.Pagination) -> ([]Review, error)   // scoped by shopId
 ListReviewsByCustomer(ctx, customerId shared.UserId, page shared.Pagination) -> ([]Review, error)
 ListPendingModeration(ctx, page shared.Pagination) -> ([]Review, error)   // admin
-GetProductRatingSummary(ctx, productId int) -> (RatingSummary, error)
+GetProductRatingSummary(ctx, shopId ShopId, productId int) -> (RatingSummary, error)   // scoped by shopId
 ```
 
 ---
@@ -303,7 +305,7 @@ Aggregates Published reviews for a product into a RatingSummary:
 
 | Port | Direction | Methods |
 |---|---|---|
-| ReviewRepo | Driven (out) | Save(ctx, review) error; FindById(ctx, id) (Review, error); FindByProductId(ctx, productId, filter, page) ([]Review, error); FindByCustomerId(ctx, customerId, page) ([]Review, error); FindByProductAndCustomer(ctx, productId, customerId) (*Review, error); UpdateStatus(ctx, id, status, extra...) error; IncrementHelpfulCount(ctx, id) error |
+| ReviewRepo | Driven (out) | Save(ctx, review) error; FindById(ctx, id) (Review, error); FindByProductId(ctx, shopId, productId, filter, page) ([]Review, error); FindByCustomerId(ctx, shopId, customerId, page) ([]Review, error); FindByProductAndCustomer(ctx, shopId, productId, customerId) (*Review, error); UpdateStatus(ctx, id, status, extra...) error; IncrementHelpfulCount(ctx, id) error |
 | ReviewVoteRepo | Driven (out) [deferred] | Save(ctx, vote) error; FindByReviewAndCustomer(ctx, reviewId, customerId) (*ReviewVote, error); Delete(ctx, id) error |
 | OrderVerificationPort | Driven (out) | HasDeliveredOrderForProduct(ctx, customerId shared.UserId, productId int) (bool, error) |
 | EventPublisher | Driven (out) | Publish(ctx, event shared.DomainEvent) error |
@@ -353,9 +355,9 @@ Aggregates Published reviews for a product into a RatingSummary:
 
 | Event | Payload | Consumer |
 |---|---|---|
-| ReviewPublished | {reviewId, productId, customerId, rating, isVerifiedPurchase} | Reporting BC |
-| ReviewRejected | {reviewId, productId, reason} | Reporting BC |
-| ReviewWithdrawn | {reviewId, productId, customerId} [Assumed — may be deferred] | Reporting BC |
+| ReviewPublished | {shopId, reviewId, productId, customerId, rating, isVerifiedPurchase} | Reporting BC |
+| ReviewRejected | {shopId, reviewId, productId, reason} | Reporting BC |
+| ReviewWithdrawn | {shopId, reviewId, productId, customerId} [Assumed — may be deferred] | Reporting BC |
 
 **APIs / queries exposed:**
 
@@ -394,6 +396,8 @@ Aggregates Published reviews for a product into a RatingSummary:
 |---|---|
 | reviews | Primary aggregate store |
 | review_votes | Vote store [deferred] |
+
+> reviews and review_votes tables include shopId column for per-store isolation.
 
 > Review stores only foreign-key references (productId, customerId, orderId).
 > It does **not** replicate any data from Product, Customer, or Order BCs.

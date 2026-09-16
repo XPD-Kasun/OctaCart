@@ -153,16 +153,16 @@ Admin creates Promotion: "30% off category Electronics, 1-2 Sep 2026, budget cap
 ### Entities
 
 - **Promotion** — A time-bound discount rule.
-  - `id` (PromoId), `name`, `description`, `kind` (PercentOff | FixedOff | FreeShipping), `discountValue`, `target` (AllProducts | CategoryIds | VariantIds), `targetIds []string`, `startsAt`, `endsAt`, `budgetCap? Money`, `usedAmount Money`, `stackable bool`, `status` (Draft | Active | Expired | Paused)
+  - `id` (PromoId), `shopId (ShopId)`, `name`, `description`, `kind` (PercentOff | FixedOff | FreeShipping), `discountValue`, `target` (AllProducts | CategoryIds | VariantIds), `targetIds []string`, `startsAt`, `endsAt`, `budgetCap? Money`, `usedAmount Money`, `stackable bool`, `status` (Draft | Active | Expired | Paused)
 
 - **Coupon** — A code-based discount token.
-  - `id` (CouponId), `code string`, `promoId PromoId`, `maxUses int?`, `usedCount int`, `perCustomerLimit int?`, `startsAt`, `endsAt`, `status` (Active | Exhausted | Expired | Revoked)
+  - `id` (CouponId), `shopId (ShopId)`, `code string`, `promoId PromoId`, `maxUses int?`, `usedCount int`, `perCustomerLimit int?`, `startsAt`, `endsAt`, `status` (Active | Exhausted | Expired | Revoked)
 
 - **Redemption** — A record of a coupon applied by a customer on an order.
-  - `id` (RedemptionId), `couponId`, `customerId`, `orderId`, `discountAmount Money`, `redeemedAt`
+  - `id` (RedemptionId), `shopId (ShopId)`, `couponId`, `customerId`, `orderId`, `discountAmount Money`, `redeemedAt`
 
 - **TaxRule** — A tax configuration entry.
-  - `id` (TaxRuleId), `label string`, `rate Percentage`, `appliesTo` (All | CategoryIds []), `jurisdiction string?`
+  - `id` (TaxRuleId), `shopId (ShopId)`, `label string`, `rate Percentage`, `appliesTo` (All | CategoryIds []), `jurisdiction string?`
 
 > Note: Variant base prices are NOT owned by Pricing. They are read from Product BC via a read port (VariantPricePort). Pricing only stores rules and derived data.
 
@@ -171,6 +171,7 @@ Admin creates Promotion: "30% off category Electronics, 1-2 Sep 2026, budget cap
 ### Value Types
 
 - `PromoId`, `CouponId`, `RedemptionId`, `TaxRuleId` — string (opaque, DB-generated)
+- `ShopId` — string (opaque; received from Auth JWT claim; not owned or validated by this BC)
 - `Money` — int64 minor units (from shared.Money)
 - `Percentage` — int basis points (e.g., 1800 = 18%)
 - `PromoKind` — enum: `PercentOff | FixedOff | FreeShipping`
@@ -185,31 +186,33 @@ Admin creates Promotion: "30% off category Electronics, 1-2 Sep 2026, budget cap
 ### Application Services
 
 - **PromotionSvc** (admin)
-  - `CreatePromotion(ctx, input CreatePromotionInput)` -> `(Promotion, error)`
-  - `UpdatePromotion(ctx, promoId, UpdatePromotionCmd)` -> `(Promotion, error)` — only while Draft or Paused
-  - `ActivatePromotion(ctx, promoId)` -> `error`
-  - `PausePromotion(ctx, promoId)` -> `error`
-  - `ExpirePromotion(ctx, promoId)` -> `error` — marks Expired; idempotent
+  - `CreatePromotion(ctx, shopId ShopId, input CreatePromotionInput)` → `(Promotion, error)`
+  - `UpdatePromotion(ctx, promoId, UpdatePromotionCmd)` → `(Promotion, error)` — only while Draft or Paused
+  - `ActivatePromotion(ctx, promoId)` → `error`
+  - `PausePromotion(ctx, promoId)` → `error`
+  - `ExpirePromotion(ctx, promoId)` → `error` — marks Expired; idempotent
+  - `ListPromotions` is scoped by `shopId` — only promotions belonging to the given shop are returned
   - Errors: `ErrPromoNotFound`, `ErrInvalidPromoTransition`, `ErrPromoOverlap`
 
 - **CouponSvc** (admin)
-  - `IssueCoupon(ctx, promoId, code, maxUses, perCustomerLimit, startsAt, endsAt)` -> `(Coupon, error)`
-  - `RevokeCoupon(ctx, couponId)` -> `error`
+  - `IssueCoupon(ctx, shopId ShopId, promoId, code, maxUses, perCustomerLimit, startsAt, endsAt)` → `(Coupon, error)`
+  - `RevokeCoupon(ctx, couponId)` → `error`
+  - `ListCoupons` is scoped by `shopId` — only coupons belonging to the given shop are returned
   - Errors: `ErrCouponNotFound`, `ErrDuplicateCouponCode`, `ErrPromoNotFound`
 
 - **PriceResolutionSvc** (called by Order at checkout)
-  - `ResolvePrice(ctx, variantId, qty int, customerId?)` -> `(PricedLine, error)` — fetches base price, matches active promos, computes effective unit price + tax
-  - `ResolveCart(ctx, lines []CartLine, destinationAddress?, customerId?)` -> `(DiscountedCart, error)` — batch resolution for all cart lines
-  - `ApplyCoupon(ctx, code, lines []CartLine, customerId)` -> `(DiscountedCart, error)` — validates coupon, applies discount, records pending redemption
-  - `ConfirmRedemption(ctx, couponCode, orderId)` -> `error` — called by Order after successful payment; commits redemption and increments usedCount
-  - `CancelRedemption(ctx, couponCode, orderId)` -> `error` — called by Order on payment failure; rolls back pending redemption
+  - `ResolvePrice(ctx, shopId ShopId, variantId, qty int, customerId?)` → `(PricedLine, error)` — fetches base price, matches active promos, computes effective unit price + tax
+  - `ResolveCart(ctx, shopId ShopId, lines []CartLine, destinationAddress?, customerId?)` → `(DiscountedCart, error)` — batch resolution for all cart lines
+  - `ApplyCoupon(ctx, shopId ShopId, code, lines []CartLine, customerId)` → `(DiscountedCart, error)` — validates coupon, applies discount, records pending redemption
+  - `ConfirmRedemption(ctx, shopId ShopId, couponCode, orderId)` → `error` — called by Order after successful payment; commits redemption and increments usedCount
+  - `CancelRedemption(ctx, shopId ShopId, couponCode, orderId)` → `error` — called by Order on payment failure; rolls back pending redemption
   - Errors: `ErrVariantNotFound`, `ErrCouponInvalid`, `ErrCouponExpired`, `ErrCouponExhausted`, `ErrCouponAlreadyUsedByCustomer`, `ErrNoActivePromotion`
 
 - **TaxSvc** (admin configuration + internal use)
-  - `CreateTaxRule(ctx, input)` -> `(TaxRule, error)`
-  - `UpdateTaxRule(ctx, ruleId, input)` -> `(TaxRule, error)`
-  - `DeleteTaxRule(ctx, ruleId)` -> `error`
-  - `CalculateTax(ctx, lineItems []TaxLine)` -> `(taxAmount Money, breakdown []TaxBreakdown, error)` — invoked internally during price resolution
+  - `CreateTaxRule(ctx, shopId ShopId, input)` → `(TaxRule, error)`
+  - `UpdateTaxRule(ctx, ruleId, input)` → `(TaxRule, error)`
+  - `DeleteTaxRule(ctx, ruleId)` → `error`
+  - `CalculateTax(ctx, shopId ShopId, lineItems []TaxLine)` → `(taxAmount Money, breakdown []TaxBreakdown, error)` — invoked internally during price resolution
   - Errors: `ErrTaxRuleNotFound`
 
 - **PricingQuerySvc** (reads — admin dashboard)
@@ -283,9 +286,9 @@ Admin creates Promotion: "30% off category Electronics, 1-2 Sep 2026, budget cap
 ### Outbound
 
 - Events published:
-  - `PromotionActivated {promoId, name, target}`
-  - `PromotionExpired {promoId, reason}` — consumed by Reporting
-  - `CouponRedeemed {couponId, orderId, customerId, discountAmount}` — consumed by Reporting
+  - `PromotionActivated {shopId, promoId, name, target}`
+  - `PromotionExpired {shopId, promoId, reason}` — consumed by Reporting
+  - `CouponRedeemed {shopId, couponId, orderId, customerId, discountAmount}` — consumed by Reporting
 - APIs / queries exposed:
   - Internal: `ResolvePrice(variantId, qty)` -> PricedLine
   - Internal: `ResolveCart(lines, address?, customerId?)` -> DiscountedCart
@@ -311,6 +314,8 @@ Admin creates Promotion: "30% off category Electronics, 1-2 Sep 2026, budget cap
 - `coupons`
 - `redemptions`
 - `tax_rules`
+
+> All tables (promotions, coupons, redemptions, tax_rules) include `shopId` column for per-store isolation.
 
 > Pricing does NOT own product_variants.price. That column stays in Product BC. Pricing reads it via VariantPricePort.
 

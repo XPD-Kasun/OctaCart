@@ -96,10 +96,10 @@
 ### Events Published
 | Event | Consumers |
 |---|---|
-| PaymentCaptured {paymentId, orderId, amount} | Order BC, Reporting BC |
-| PaymentFailed {paymentId, orderId, reason} | Order BC, Reporting BC |
-| RefundIssued {refundId, paymentId, orderId, amount} | Order BC, Reporting BC |
-| RefundFailed {refundId, paymentId, reason} | Reporting BC |
+| PaymentCaptured {shopId, paymentId, orderId, amount} | Order BC, Reporting BC |
+| PaymentFailed {shopId, paymentId, orderId, reason} | Order BC, Reporting BC |
+| RefundIssued {shopId, refundId, paymentId, orderId, amount} | Order BC, Reporting BC |
+| RefundFailed {shopId, refundId, paymentId, reason} | Reporting BC |
 
 ---
 
@@ -243,6 +243,7 @@ Reporting BC reacts: records refund event
 |---|---|---|
 | id | PaymentId | Opaque int, DB-generated |
 | orderId | int | Reference to Order BC — foreign key only |
+| shopId | ShopId | Passed in from Order BC at initiation; identifies which store this payment belongs to |
 | amount | shared.Money | int64 minor units — captured from Order at initiation |
 | currency | string | ISO 4217 (e.g., "INR") — single-currency platform [Assumed] |
 | status | PaymentStatus | Lifecycle state machine |
@@ -274,6 +275,7 @@ Reporting BC reacts: records refund event
 |---|---|---|
 | PaymentId | int | Opaque; constructors enforce non-zero [Inferred] |
 | RefundId | int | Opaque; constructors enforce non-zero [Inferred] |
+| ShopId | string | Opaque; passed from Order BC; not validated by Payment BC |
 | PaymentStatus | string enum | Initiated | Captured | Failed | Refunded | PartiallyRefunded |
 | RefundStatus | string enum | Pending | Issued | Failed |
 | GatewayStatus | string enum | ACL-internal only: Pending | Succeeded | Failed — never leaves the adapter |
@@ -284,7 +286,7 @@ Reporting BC reacts: records refund event
 
 #### PaymentSvc
 
-InitiatePayment(ctx context.Context, orderId int, amount shared.Money, currency string, metadata map[string]string) (Payment, checkoutUrl string, error)
+InitiatePayment(ctx context.Context, shopId ShopId, orderId int, amount shared.Money, currency string, metadata map[string]string) (Payment, checkoutUrl string, error)
 - Creates Payment record (status: Initiated)
 - Calls PaymentGatewayPort.CreateCheckoutSession
 - Returns checkoutUrl to caller
@@ -328,7 +330,7 @@ ListRefunds(ctx context.Context, paymentId PaymentId) ([]Refund, error)
 
 | Port | Methods |
 |---|---|
-| PaymentRepo | Save(ctx, Payment) error · FindById(ctx, PaymentId) (Payment, error) · FindByOrderId(ctx, orderId int) (Payment, error) · FindByGatewayRef(ctx, gatewayRef string) (Payment, error) · UpdateStatus(ctx, Payment) error |
+| PaymentRepo | Save(ctx, Payment) error · FindById(ctx, PaymentId) (Payment, error) · FindByOrderId(ctx, orderId int) (Payment, error) [implicitly shopId-scoped via orderId ownership] · FindByGatewayRef(ctx, gatewayRef string) (Payment, error) · UpdateStatus(ctx, Payment) error |
 | RefundRepo | Save(ctx, Refund) error · FindById(ctx, RefundId) (Refund, error) · FindByPaymentId(ctx, PaymentId) ([]Refund, error) · SumIssuedRefunds(ctx, PaymentId) (shared.Money, error) · UpdateStatus(ctx, Refund) error |
 | PaymentGatewayPort | CreateCheckoutSession(ctx, orderId int, amount shared.Money, currency string, metadata map[string]string) (sessionToken string, checkoutUrl string, error) · RefundCharge(ctx, gatewayRef string, amount shared.Money) (gatewayRefundRef string, error) · VerifyWebhookSignature(payload []byte, signature string, secret string) error |
 | EventPublisher | Publish(ctx context.Context, event shared.DomainEvent) error |
@@ -396,10 +398,10 @@ ListRefunds(ctx context.Context, paymentId PaymentId) ([]Refund, error)
 **Events published:**
 | Event | Payload | Consumers |
 |---|---|---|
-| PaymentCaptured | {paymentId, orderId, amount} | Order BC (-> Paid), Reporting BC |
-| PaymentFailed | {paymentId, orderId, reason} | Order BC (-> releases reservation), Reporting BC |
-| RefundIssued | {refundId, paymentId, orderId, amount} | Order BC, Reporting BC |
-| RefundFailed | {refundId, paymentId, reason} | Reporting BC |
+| PaymentCaptured | {shopId, paymentId, orderId, amount} | Order BC (-> Paid), Reporting BC |
+| PaymentFailed | {shopId, paymentId, orderId, reason} | Order BC (-> releases reservation), Reporting BC |
+| RefundIssued | {shopId, refundId, paymentId, orderId, amount} | Order BC, Reporting BC |
+| RefundFailed | {shopId, refundId, paymentId, reason} | Reporting BC |
 
 **REST (Admin):**
 - GET /api/v1/payments — list payments
@@ -433,7 +435,7 @@ ListRefunds(ctx context.Context, paymentId PaymentId) ([]Refund, error)
 ---
 
 ### Data Owned
-- payments table — all payment lifecycle records
+- payments table — all payment lifecycle records; includes shopId column for scoping and reporting purposes.
 - refunds table — all refund records
 
 > **Boundary rule:** Payment does NOT own order data. orderId is a foreign-key reference only. Order totals are passed in at initiation time and are NOT replicated into the payment schema.

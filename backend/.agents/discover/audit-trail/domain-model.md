@@ -108,6 +108,7 @@
 - **AuditEntry** — Aggregate root representing an immutable audit log record.
   - `id` (AuditEntryId)
   - `timestamp` (time.Time)
+  - `shopId` (ShopId) — _shopId identifies which store the audited action occurred in; passed through from the triggering event or direct RecordAuditEntry call._
   - `actor` (Actor: `{id, kind, displayName, ipAddress, userAgent}`)
   - `contextName` (string, e.g. "Product", "Pricing", "Order", "Auth")
   - `entityName` (string, e.g. "ProductVariant", "Promotion", "User")
@@ -124,12 +125,13 @@
 - **Actor** — `{id string, kind ActorKind, displayName string, ipAddress string, userAgent string}`
 - **ActionType** — enum: `Create | Update | Delete | Transition | Security`
 - **ChangeSet** — `{before map[string]any, after map[string]any}`
-- **AuditFilter** — `{actorId?, contextName?, entityName?, entityId?, action?, fromDate?, toDate?}`
+- **ShopId** — string (opaque; threaded from upstream event or direct audit call; not validated by Audit Trail BC)
+- **AuditFilter** — `{actorId?, shopId?, contextName?, entityName?, entityId?, action?, fromDate?, toDate?}`
 
 ### Application Services
 
 - **AuditTrailSvc**
-  - `Record(ctx, RecordAuditCmd)` -> `(AuditEntryId, error)`
+  - `Record(ctx, shopId ShopId, RecordAuditCmd)` → `(AuditEntryId, error)`
     - Validates and persists an immutable audit entry.
   - `GetEntry(ctx, entryId)` -> `(AuditEntry, error)`
     - Fetches a single audit entry with its full before/after diff.
@@ -192,7 +194,7 @@
 
 ### Data Owned
 
-- `audit_entries` (strictly append-only table)
+- `audit_entries` (strictly append-only table) — _includes shopId for per-store compliance filtering._
 
 ### Ambiguous Questions Needed From Architect
 

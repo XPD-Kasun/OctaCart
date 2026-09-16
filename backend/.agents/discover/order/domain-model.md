@@ -173,14 +173,14 @@ Splitting Cart from Order was considered and rejected: they share the same langu
 ### Entities
 
 - **Cart** — A transient pre-order aggregate.
-  - `id` (CartId), `customerId?` (nil for guest), `lines []CartLine`, `couponCode?`, `createdAt`, `updatedAt`, `expiresAt?`
+  - `id` (CartId), `shopId` (ShopId), `customerId?` (nil for guest), `lines []CartLine`, `couponCode?`, `createdAt`, `updatedAt`, `expiresAt?`
 
 - **CartLine** — One intent-to-purchase entry in a cart.
   - `id` (CartLineId), `cartId`, `variantId`, `qty`
   > No price stored — resolved live from Pricing BC on demand.
 
 - **Order** — The central aggregate; immutable after placement.
-  - `id` (OrderId), `customerId?`, `status` (OrderStatus), `lines []OrderLine`, `shippingAddress` (AddressSnapshot), `billingAddress?` (AddressSnapshot), `shippingMethodId`, `shippingCost` (Money), `subtotal` (Money), `discountAmount` (Money), `taxAmount` (Money), `grandTotal` (Money), `couponCode?`, `notes?`, `placedAt`, `updatedAt`
+  - `id` (OrderId), `shopId` (ShopId), `customerId?`, `status` (OrderStatus), `lines []OrderLine`, `shippingAddress` (AddressSnapshot), `billingAddress?` (AddressSnapshot), `shippingMethodId`, `shippingCost` (Money), `subtotal` (Money), `discountAmount` (Money), `taxAmount` (Money), `grandTotal` (Money), `couponCode?`, `notes?`, `placedAt`, `updatedAt`
 
 - **OrderLine** — An immutable line within an order.
   - `id` (OrderLineId), `orderId`, `variantId`, `qty`, `unitPrice` (Money — PriceSnapshot), `lineTotal` (Money)
@@ -193,6 +193,7 @@ Splitting Cart from Order was considered and rejected: they share the same langu
 ### Value Types
 
 - `CartId`, `CartLineId`, `OrderId`, `OrderLineId`, `ReservationId` — string (opaque, DB-generated)
+- `ShopId` — string (opaque; received from Auth JWT claim; not owned or validated by this BC)
 - `Money` — int64 minor units (from shared.Money)
 - `OrderStatus` — enum: `Pending | Paid | Fulfilled | Dispatched | Delivered | Cancelled | ReturnReceived`
 - `ReservationStatus` — enum: `Held | Confirmed | Released`
@@ -216,7 +217,7 @@ Splitting Cart from Order was considered and rejected: they share the same langu
 
 - **CheckoutSvc**
   - `Checkout(ctx, CheckoutCmd)` -> `(Order, error)` — atomic: snapshots address, resolves prices, checks stock, creates Order, invalidates Cart, publishes OrderPlaced
-    - `CheckoutCmd`: `{cartId, customerId?, shippingAddressId?, inlineAddress?, shippingMethodId, billingAddressId?, notes?}`
+    - `CheckoutCmd`: `{shopId ShopId, cartId, customerId?, shippingAddressId?, inlineAddress?, shippingMethodId, billingAddressId?, notes?}`
   - Errors: `ErrCartNotFound`, `ErrCartEmpty`, `ErrInsufficientStock`, `ErrAddressRequired`, `ErrPricingUnavailable`, `ErrShippingMethodInvalid`
 
 - **OrderSvc** (lifecycle management)
@@ -268,13 +269,13 @@ Splitting Cart from Order was considered and rejected: they share the same langu
 
 | Port | Methods |
 |---|---|
-| `CartRepo` | `Save`, `FindById`, `FindByCustomerId`, `Delete` |
-| `OrderRepo` | `Save`, `FindById`, `FindByCustomerId`, `List`, `UpdateStatus` |
+| `CartRepo` | `Save`, `FindById`, `FindByCustomerId(ctx, customerId, shopId)`, `List(ctx, shopId, filter, page)`, `Delete` |
+| `OrderRepo` | `Save`, `FindById`, `FindByCustomerId(ctx, customerId, shopId)`, `List(ctx, shopId, filter, page)`, `UpdateStatus` |
 | `StockReservationRepo` | `Save`, `FindByOrderId`, `UpdateStatus` |
 | `CustomerAddressPort` | `GetAddressSnapshot(ctx, customerId, addressId?) -> AddressSnapshot` |
-| `PricingPort` | `ResolveCart(ctx, lines, customerId?) -> DiscountedCart`, `ApplyCoupon(ctx, code, lines, customerId) -> DiscountedCart`, `ConfirmRedemption(ctx, code, orderId) -> error`, `CancelRedemption(ctx, code, orderId) -> error` |
+| `PricingPort` | `ResolveCart(ctx, shopId ShopId, lines, customerId?) -> DiscountedCart`, `ApplyCoupon(ctx, shopId ShopId, code, lines, customerId) -> DiscountedCart`, `ConfirmRedemption(ctx, code, orderId) -> error`, `CancelRedemption(ctx, code, orderId) -> error` |
 | `ProductStockPort` | `CheckVariantExists(ctx, variantId) -> bool`, `CheckStock(ctx, variantId, qty) -> bool`, `ReserveStock(ctx, variantId, qty, orderId) -> error`, `ReleaseStock(ctx, variantId, qty, orderId) -> error` |
-| `ShippingRatePort` | `QuoteRates(ctx, destination AddressSnapshot, items []ShipmentItem) -> []ShippingQuote` |
+| `ShippingRatePort` | `QuoteRates(ctx, shopId ShopId, destination AddressSnapshot, items []ShipmentItem) -> []ShippingQuote` |
 | `EventPublisher` | `Publish(ctx, event shared.DomainEvent)` |
 
 ---
@@ -330,13 +331,13 @@ Splitting Cart from Order was considered and rejected: they share the same langu
 ### Outbound
 
 - Events published:
-  - `OrderPlaced {orderId, customerId?, lineItems, grandTotal, shippingAddress}` — Payment, Reporting
-  - `OrderPaid {orderId, customerId?}` — Reporting
-  - `OrderFulfilled {orderId, shippingAddress, lineItems, weights}` — Shipping, Reporting
-  - `OrderDispatched {orderId, trackingNumber}` — Reporting
-  - `OrderDelivered {orderId}` — Reporting
-  - `OrderCancelled {orderId, customerId?, reason, refundAmount?}` — Payment (if refund needed), Reporting
-  - `OrderPaymentFailed {orderId, reason}` — Reporting
+  - `OrderPlaced {shopId, orderId, customerId?, lineItems, grandTotal, shippingAddress}` — Payment, Reporting
+  - `OrderPaid {shopId, orderId, customerId?}` — Reporting
+  - `OrderFulfilled {shopId, orderId, shippingAddress, lineItems, weights}` — Shipping, Reporting
+  - `OrderDispatched {shopId, orderId, trackingNumber}` — Reporting
+  - `OrderDelivered {shopId, orderId}` — Reporting
+  - `OrderCancelled {shopId, orderId, customerId?, reason, refundAmount?}` — Payment (if refund needed), Reporting
+  - `OrderPaymentFailed {shopId, orderId, reason}` — Reporting
 - APIs / queries exposed:
   - Admin REST: `/api/v1/orders`, `/api/v1/orders/:id`, `/api/v1/orders/:id/fulfil`, `/api/v1/orders/:id/cancel`
   - Storefront REST: `/api/v1/cart`, `/api/v1/checkout`, `/api/v1/me/orders`
@@ -365,6 +366,8 @@ Splitting Cart from Order was considered and rejected: they share the same langu
 - `orders`
 - `order_lines`
 - `stock_reservations`
+
+> All tables are shopId-scoped; shopId column is present on carts, orders, order_lines, and stock_reservations.
 
 > Order does NOT own product, variant, or pricing tables. All pricing and product data is fetched at checkout time and stored as immutable snapshots on Order/OrderLine.
 

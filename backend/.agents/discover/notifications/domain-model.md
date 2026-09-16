@@ -16,7 +16,7 @@
 ### Business Flows Touching Notifications
 
 1. **Transactional Customer Order Communications**: Order placed, payment confirmed, order cancelled, refund issued. [Inferred — standard e-commerce customer journey]
-2. **Fulfillment & Delivery Alerts**: Tracking number added, shipment dispatched, out for delivery, successfully delivered. [Inferred — context-map Shipping and Order flows]
+2. **Fulfillment & Delivery Alerts**: Tracking number added, shipment dispatched, out for delivery, successfully delivered, delivery failed. [Inferred — context-map Shipping and Order flows]
 3. **Account & Identity Alerts**: Welcome email on registration, password reset link/token, account deactivation confirmation. [Inferred — Auth/Customer lifecycle]
 4. **Merchant Operational Alerts**: Low stock threshold reached, critical payment failure or chargeback alert, new order notification. [Assumed — common small seller convenience]
 5. **Template Rendering and Delivery**: Message content is rendered with context data (order items, customer name) into recipient-friendly HTML/text and sent through delivery gateways with status tracking. [Inferred]
@@ -37,6 +37,7 @@
 ### Timeline B — Fulfillment Triggers
 - `ShipmentDispatched` (event, Shipping BC) -> `EnqueueNotification(shipment_dispatched_template, recipient, payload)`
 - `ShipmentDelivered` (event, Shipping BC) -> `EnqueueNotification(shipment_delivered_template, recipient, payload)`
+- `DeliveryFailed` (event, Shipping BC) -> `EnqueueNotification(delivery_failed_template, recipient, payload)`
 
 ### Timeline C — Identity Triggers
 - `PasswordResetRequested` (event, Auth BC) -> `EnqueueNotification(password_reset_template, recipient, payload)`
@@ -117,6 +118,7 @@
 
 - **Notification** — The aggregate root representing a dispatched or queued message.
   - `id` (NotificationId)
+  - `shopId` (ShopId) — _shopId received from the upstream domain event payload; used for template scoping and delivery log partitioning._
   - `recipient` (Recipient)
   - `channel` (Channel)
   - `templateKey` (string)
@@ -139,6 +141,7 @@
 
 - **NotificationId** — `string` (opaque unique identifier)
 - **TemplateId** — `string` (opaque unique identifier)
+- **ShopId** — string (opaque; extracted from consumed event payloads; not owned by Notifications BC)
 - **Channel** — enum: `Email | SMS` (V1 focuses on `Email`)
 - **Recipient** — `{destination string, name string?}`
 - **NotificationStatus** — enum: `Pending | Sending | Sent | Failed`
@@ -201,9 +204,10 @@
 - Events consumed:
   - From Order: `OrderPlaced`, `OrderCancelled`
   - From Payment: `PaymentCaptured`, `RefundIssued`
-  - From Shipping: `ShipmentDispatched`, `ShipmentDelivered`
+  - From Shipping: `ShipmentDispatched`, `ShipmentDelivered`, `DeliveryFailed`
   - From Customer: `CustomerRegistered`
   - From Auth: `PasswordResetRequested`
+  - > **Note**: All consumed events carry shopId in their payload; Notifications BC threads shopId into the Notification record for traceability.
 
 ### Outbound
 
@@ -224,7 +228,7 @@
 
 ### Data Owned
 
-- `notifications` (delivery history, recipient, status, attempts, errors)
+- `notifications` (delivery history, recipient, status, attempts, errors) — _includes shopId for per-store delivery tracking._
 - `notification_templates` (template key, subject, body, channel)
 
 ### Ambiguous Questions Needed From Architect

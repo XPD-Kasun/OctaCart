@@ -5,7 +5,7 @@
 
 > **Architecture notes (decided)**
 > - Storage is fully deferred behind repository ports — no specific DB assumed.
-> - Single-seller/single-admin platform (no sellerId scoping needed).
+> - Multi-store platform; shopId scopes all catalog data to a specific store. shopId is extracted from the authenticated request context (JWT claim) and threaded through all application service calls.
 > - Variants stored in a separate collection (via a dedicated port).
 > - Stock adjustment via async domain event (`StockAdjusted`); consumption mechanism TBD.
 > - Image upload to local folder initially; designed for multi-tenancy when it arrives.
@@ -19,7 +19,7 @@
 Add public getters for the below for Dto boundaries appservice -> handler.
 
 - **Product** — The central aggregate root.
-  - `id` (ProductId), `title`, `slug`, `description`, `status` (Draft | Active | Archived), `categoryId`, `tags []string`, `createdAt`, `updatedAt, isDigital`
+  - `id` (ProductId), `shopId` (ShopId), `title`, `slug`, `description`, `status` (Draft | Active | Archived), `categoryId`, `tags []string`, `createdAt`, `updatedAt, isDigital`
 - **ProductVariant** — A purchasable SKU within a product (e.g., Size=L, Color=Red). Stored in a separate collection.
   - `id` (VariantId), `productId`, `sku`, `price` (Money), `compareAtPrice` (Money?), `stockQty`, `attrs ProAttributes`, `mediaId? `
 - **Category** — A hierarchical grouping of products.  We use single heirarchy with single parent. only the leaves can have products. We use materialized paths. 
@@ -43,6 +43,7 @@ Add public getters for the below for Dto boundaries appservice -> handler.
 - **ProAttributes** - map[string]AttrType - A tyoe collection of key, value for product attr name and datatype(see below).
   This should have methods: Add(attr string, datatype AttrType), Attrs() : keys of the map, Remove(attr), New()
 - **AttrType** - string any single of `Num | Str | Enum (eg: Enum:XL|M|SX) | Range (eg: Range:1|10)`. We need to have a parser for this as a method
+- **ShopId** — string (opaque; received from Auth JWT claim; not owned or validated by this BC)
 
 Note: datatype for `ProAttributes` is defined by us and is an enum. These are used as a kind of specification that is adhered by products attached to this category. Useful for filtering.
 ---
@@ -80,6 +81,7 @@ Note: datatype for `ProAttributes` is defined by us and is an enum. These are us
   - `GetProducts(ctx, filter ProductFilter, page shared.Pagination)` → `([]*Product, error)`
   - `GetVariant(ctx, variantId)` → `(*ProductVariant, error)`
   - `GetStockLevel(ctx, variantId)` → `(int, error)`
+  - **Note**: All query methods receive shopId from request context as a mandatory parameter to scope results to the correct store.
 
 ---
 
@@ -92,15 +94,15 @@ Note: datatype for `ProAttributes` is defined by us and is an enum. These are us
 
 ### Ports (Interfaces - storage agnostic)
 
-| Port             | Methods                                                                                     |
-| ---------------- | ------------------------------------------------------------------------------------------- |
-| `ProductRepo`    | `Save`, `FindById`, `FindBySlug`, `List`, `Delete`                                          |
-| `VariantRepo`    | `Save`, `FindById`, `FindByProductId`, `FindBySKU`, `Delete`                                |
-| `CategoryRepo`   | `Save`, `GetCatBySlug(ctx, slug)`, `GetCatById(ctx, id)`, `GetDescendCats(ctx, catId)`      |
-| `MediaRepo`      | `Save`, `FindById`, `FindByProId`, `Delete`                                             |
-| `ImageStore`     | `Store(file) → filePath`, `Delete(filePath)` — filesystem abstraction (multi-tenancy ready) |
-| `OrderQueryPort` | `HasActiveOrdersForVariant(ctx, variantId) → bool` — read-only check into Order BC          |
-| `EventPublisher` | `Publish(ctx, event shared.DomainEvent)` — in-process initially                                    |
+| Port             | Methods                                                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `ProductRepo`    | `Save`, `FindById(ctx, id, shopId)`, `FindBySlug(ctx, slug, shopId)`, `List(ctx, shopId, filter, page)`, `Delete`              |
+| `VariantRepo`    | `Save`, `FindById`, `FindByProductId(ctx, productId, shopId)`, `FindBySKU(ctx, sku, shopId)`, `Delete`                         |
+| `CategoryRepo`   | `Save`, `GetCatBySlug(ctx, slug, shopId)`, `GetCatById(ctx, id, shopId)`, `GetDescendCats(ctx, catId, shopId)`                 |
+| `MediaRepo`      | `Save`, `FindById`, `FindByProId`, `Delete`                                                                                    |
+| `ImageStore`     | `Store(file) → filePath`, `Delete(filePath)` — filesystem abstraction (multi-tenancy ready)                                    |
+| `OrderQueryPort` | `HasActiveOrdersForVariant(ctx, variantId) → bool` — read-only check into Order BC                                            |
+| `EventPublisher` | `Publish(ctx, event shared.DomainEvent)` — in-process initially                                                                |
 In above CategoryRepo use ProAttributes as a jsonb.
 ---
 
@@ -112,7 +114,7 @@ In above CategoryRepo use ProAttributes as a jsonb.
 | Driven  | `VariantRepoImpl`        | Implements `VariantRepo` (DB TBD)                                                 |
 | Driven  | `CategoryRepoImpl`       | Implements `CategoryRepo` (DB TBD)                                                |
 | Driven  | `MediaRepoImpl`          | Implements `MediaRepo` (DB TBD)                                                   |
-| Driven  | `LocalImageStore`        | Implements `ImageStore` — saves to local folder; path includes tenant placeholder |
+| Driven  | `LocalImageStore`        | Implements `ImageStore` — saves to local folder; path includes shopId for store isolation |
 | Driven  | `InProcessEventBus`      | Implements `EventPublisher` — in-process fan-out                                  |
 | Driving | `ProductRestHandler`     | Gin REST handlers under `/api/v1/products`                                        |
 | Driving | `ProductGraphQLResolver` | GraphQL resolvers for storefront product queries                                  |
@@ -164,10 +166,10 @@ In above CategoryRepo use ProAttributes as a jsonb.
 ### Outbound
 
 - **Events published**:
-  - `ProductPublished {productId, title, slug}` — Reporting
-  - `ProductArchived {productId}` — Reporting
-  - `StockAdjusted {variantId, delta, newQty}` — Reporting; Order (consumed via async mechanism TBD)
-  - `VariantPriceChanged {variantId, oldPrice, newPrice}` — Order (to invalidate active carts)
+  - `ProductPublished {shopId, productId, title, slug}` — Reporting
+  - `ProductArchived {shopId, productId}` — Reporting
+  - `StockAdjusted {shopId, variantId, delta, newQty}` — Reporting; Order (consumed via async mechanism TBD)
+  - `VariantPriceChanged {shopId, variantId, oldPrice, newPrice}` — Order (to invalidate active carts)
 - **REST endpoints** (admin):
   - `POST /api/v1/products`, `GET /api/v1/products`, `GET /api/v1/products/:id`
   - `PATCH /api/v1/products/:id`, `POST /api/v1/products/:id/publish`, `POST /api/v1/products/:id/archive`

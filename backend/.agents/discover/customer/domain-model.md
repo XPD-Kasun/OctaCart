@@ -30,7 +30,7 @@ The split is justified by:
 
 ### Business Flows Touching Customer
 
-1. **Registration**: Shopper signs up via form or OIDC -> Auth creates a User -> Customer BC creates a CustomerProfile linked to that UserId. [Inferred — Auth already creates User; Customer profile creation is the next step]
+1. **Registration**: Shopper signs up via form or OIDC -> Auth creates a User -> Customer BC creates a CustomerProfile linked to that UserId and scoped to the shopId. [Inferred — Auth already creates User; Customer profile creation is the next step]
 2. **Profile Management**: Shopper updates display name, phone number, profile picture. [Assumed — standard e-commerce need]
 3. **Address Book Management**: Shopper adds, edits, deletes saved addresses; marks one as default. [Inferred — context-map.md and shipping.md: "Customer owns the editable address book"]
 4. **Checkout Address Supply**: Order BC reads the chosen address from Customer to snapshot onto an order. [Inferred — context-map: Customer -> Order (Customer-Supplier)]
@@ -113,7 +113,7 @@ Customer profile and address management is business-specific but not OctaCart's 
 
 | Term | Definition in THIS context |
 |---|---|
-| Customer | A registered shopper with a profile, address book, and buying history within this store |
+| Customer | A registered shopper with a profile, address book, and buying history within a specific store (shopId-scoped) |
 | CustomerProfile | The mutable record of a customer's personal details (name, phone, email display, avatar) |
 | Address | A saved delivery or billing location in the customer's personal address book — editable at any time |
 | Default Address | The address pre-filled at checkout unless the customer selects another |
@@ -187,7 +187,7 @@ Customer profile and address management is business-specific but not OctaCart's 
 ### Entities
 
 - **CustomerProfile** — Aggregate root.
-  - `id` (CustomerId), `userId` (shared.UserId — foreign key into Auth), `firstName`, `lastName`, `displayName`, `phone?`, , `avatarUri?`, `status` (Active | Deactivated), `marketingConsent bool`, `createdAt`, `updatedAt`, `createdBy AdminId`
+  - `id` (CustomerId), `shopId` (ShopId), `userId` (shared.UserId — foreign key into Auth), `firstName`, `lastName`, `displayName`, `phone?`, , `avatarUri?`, `status` (Active | Deactivated), `marketingConsent bool`, `createdAt`, `updatedAt`, `createdBy AdminId`
 
 - **Address** — A saved address-book entry.
   - `id` (AddressId), `customerId`, `label?` (e.g., "Home", "Office"), `recipientName`, `line1`, `line2?`, `city`, `province?`, `postalCode`, `country`, `phone?`, `isDefault bool`
@@ -203,6 +203,7 @@ Customer profile and address management is business-specific but not OctaCart's 
 - `CustomerId` — string (opaque, DB-generated)
 - `AddressId` — string (opaque, DB-generated)
 - `WishlistItemId` — string (opaque, DB-generated)
+- `ShopId` — string (opaque; received from Auth JWT claim; not owned or validated by this BC)
 - `CustomerStatus` — enum: `Active | Deactivated`
 - `AddressSnapshot` — `{recipientName, line1, line2?, city, province?, postalCode, country, phone?}` — read-only value object returned to Order BC; does NOT include AddressId or customerId
 
@@ -211,7 +212,7 @@ Customer profile and address management is business-specific but not OctaCart's 
 ### Application Services
 
 - **CustomerSvc** (primary)
-  - `RegisterCustomer(ctx, userId shared.UserId, firstName, lastName, email string)` -> `(CustomerProfile, error)` — creates profile after Auth registration; idempotent on duplicate userId
+  - `RegisterCustomer(ctx, shopId ShopId, userId shared.UserId, firstName, lastName, email string)` -> `(CustomerProfile, error)` — creates profile after Auth registration; idempotent on duplicate userId
   - `UpdateProfile(ctx, customerId, UpdateProfileCmd)` -> `(CustomerProfile, error)` — mutable fields: firstName, lastName, displayName, phone, email, avatarUri, marketingConsent
   - `DeactivateAccount(ctx, customerId)` -> `error` — soft-delete; publishes AccountDeactivated
   - `ReactivateAccount(ctx, customerId)` -> `error` — admin action to undo deactivation
@@ -224,6 +225,7 @@ Customer profile and address management is business-specific but not OctaCart's 
   - Errors: `ErrAddressNotFound`, `ErrCannotDeleteOnlyAddress`, `ErrCustomerNotFound`
 
 - **CustomerQuerySvc** (reads — admin dashboard and storefront)
+  > All query methods receive shopId from request context as a mandatory scoping parameter.
   - `GetCustomer(ctx, customerId)` -> `(CustomerProfile, error)`
   - `GetCustomerByUserId(ctx, userId shared.UserId)` -> `(CustomerProfile, error)` — called after Auth login to resolve customerId
   - `ListCustomers(ctx, filter CustomerFilter, page shared.Pagination)` -> `([]CustomerProfile, error)`
@@ -253,6 +255,8 @@ Customer profile and address management is business-specific but not OctaCart's 
 | Driven | `InProcessEventBus` | Implements `EventPublisher` — shared with other BCs |
 | Driving | `CustomerRestHandler` | Admin REST under `/api/v1/customers` |
 | Driving | `CustomerStorefrontHandler` | Authenticated shopper REST under `/api/v1/me` (profile, addresses, wishlist) |
+
+> **Ports note (shopId scoping):** `CustomerRepo.FindByUserId` becomes `FindByUserIdAndShop(ctx, userId, shopId)`. `ListCustomers` is always scoped by shopId — no cross-shop listing is permitted at the repository level.
 
 ---
 
@@ -298,9 +302,9 @@ Customer profile and address management is business-specific but not OctaCart's 
 ### Outbound
 
 - Events published:
-  - `CustomerRegistered {customerId, userId, email}` — Reporting
+  - `CustomerRegistered {shopId, customerId, userId, email}` — Reporting
   - `ProfileUpdated {customerId, changedFields}` — Reporting [Assumed]
-  - `AccountDeactivated {customerId, userId}` — Reporting; Auth BC (to revoke sessions)
+  - `AccountDeactivated {shopId, customerId, userId}` — Reporting; Auth BC (to revoke sessions)
   - `WishlistItemAdded {customerId, variantId}` — Reporting [Assumed, low priority]
 - APIs / queries exposed:
   - `GetAddressSnapshot(customerId, addressId?)` -> `AddressSnapshot` — consumed by Order BC (in-process)
@@ -328,6 +332,7 @@ Customer profile and address management is business-specific but not OctaCart's 
 
 > Customer does NOT own `auth.users` or any Auth table. The link is via `userId` (shared.UserId) as a foreign-key reference, not a shared table.
 > WishlistItem stores only a `variantId` reference — no Product or Pricing data is replicated here.
+> **All tables are implicitly shopId-scoped; `shopId` column is present on `customer_profiles` and `customer_addresses`.**
 
 ---
 
