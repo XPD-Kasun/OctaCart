@@ -19,4 +19,5 @@ var (
 	ErrVariantHasActiveOrders = errors.New("variant has active orders")
 	ErrCategoryInUse          = errors.New("category is assigned to products")
 	ErrMediaNotFound          = errors.New("media not found")
+	ErrMissingShopId          = errors.New("shop ID is required")
 )

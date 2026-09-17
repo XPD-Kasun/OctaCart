@@ -50,3 +50,16 @@ func TestPagination_Offset(t *testing.T) {
 		})
 	}
 }
+
+func TestShopId(t *testing.T) {
+	t.Run("ShopId string casting and equality", func(t *testing.T) {
+		const raw = "shop_12345"
+		s := ShopId(raw)
+		if string(s) != raw {
+			t.Errorf("expected %s, got %s", raw, string(s))
+		}
+		if s != ShopId("shop_12345") {
+			t.Errorf("expected equality for same string value")
+		}
+	})
+}

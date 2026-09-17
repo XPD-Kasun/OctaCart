@@ -10,6 +10,7 @@
 package product
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -19,6 +20,32 @@ import (
 
 	"octacart/internal/shared"
 )
+
+// ShopId represents the opaque identifier of a store tenant.
+type ShopId = shared.ShopId
+
+type shopIdCtxKey struct{}
+
+// WithShopId returns a new context carrying the given shopId.
+func WithShopId(ctx context.Context, shopId ShopId) context.Context {
+	return context.WithValue(ctx, shopIdCtxKey{}, shopId)
+}
+
+// ShopIdFromContext extracts the shopId from context. Returns ErrMissingShopId if not found or empty.
+func ShopIdFromContext(ctx context.Context) (ShopId, error) {
+	if ctx == nil {
+		return "", ErrMissingShopId
+	}
+	val := ctx.Value(shopIdCtxKey{})
+	if val == nil {
+		return "", ErrMissingShopId
+	}
+	shopId, ok := val.(ShopId)
+	if !ok || strings.TrimSpace(string(shopId)) == "" {
+		return "", ErrMissingShopId
+	}
+	return shopId, nil
+}
 
 // ID types representing opaque entity identifiers.
 type ProId int
@@ -175,6 +202,7 @@ func (a *Attributes) Has(name string) bool {
 // Product represents the central catalog item aggregate root.
 type Product struct {
 	id          ProId
+	shopId      ShopId
 	title       string
 	slug        string
 	description string
@@ -188,6 +216,9 @@ type Product struct {
 
 // Id returns the product ID.
 func (p *Product) Id() ProId { return p.id }
+
+// ShopId returns the owning store's shop ID.
+func (p *Product) ShopId() ShopId { return p.shopId }
 
 // Title returns the product title.
 func (p *Product) Title() string { return p.title }
@@ -224,7 +255,10 @@ func (p *Product) CreatedAt() time.Time { return p.createdAt }
 func (p *Product) UpdatedAt() time.Time { return p.updatedAt }
 
 // NewProduct creates a new Product aggregate in Draft status.
-func NewProduct(title, description string, categoryId CatId, isDigital bool, tags []string) (*Product, error) {
+func NewProduct(shopId ShopId, title, description string, categoryId CatId, isDigital bool, tags []string) (*Product, error) {
+	if strings.TrimSpace(string(shopId)) == "" {
+		return nil, ErrMissingShopId
+	}
 	if strings.TrimSpace(title) == "" {
 		return nil, errors.New("title cannot be empty")
 	}
@@ -235,6 +269,7 @@ func NewProduct(title, description string, categoryId CatId, isDigital bool, tag
 		copy(tagsCopy, tags)
 	}
 	return &Product{
+		shopId:      shopId,
 		title:       title,
 		description: description,
 		categoryId:  categoryId,
@@ -441,6 +476,7 @@ func (v *ProductVariant) SetPrice(newPrice shared.Money) (oldPrice shared.Money,
 // Category represents a hierarchical category node.
 type Category struct {
 	id        CatId
+	shopId    ShopId
 	name      string
 	slug      string
 	parentId  *CatId
@@ -452,6 +488,9 @@ type Category struct {
 
 // Id returns the category ID.
 func (c *Category) Id() CatId { return c.id }
+
+// ShopId returns the owning store's shop ID.
+func (c *Category) ShopId() ShopId { return c.shopId }
 
 // Name returns the category display name.
 func (c *Category) Name() string { return c.name }
@@ -481,7 +520,10 @@ func (c *Category) SortOrder() int { return c.sortOrder }
 func (c *Category) Attrs() *Attributes { return c.attrs }
 
 // NewCategory creates a new category.
-func NewCategory(name, slug string, parentPath string, parentId *CatId) (*Category, error) {
+func NewCategory(shopId ShopId, name, slug string, parentPath string, parentId *CatId) (*Category, error) {
+	if strings.TrimSpace(string(shopId)) == "" {
+		return nil, ErrMissingShopId
+	}
 	if strings.TrimSpace(name) == "" {
 		return nil, errors.New("name cannot be empty")
 	}
@@ -495,6 +537,7 @@ func NewCategory(name, slug string, parentPath string, parentId *CatId) (*Catego
 		pId = &val
 	}
 	return &Category{
+		shopId:    shopId,
 		name:      name,
 		slug:      slug,
 		parentId:  pId,

@@ -7,6 +7,7 @@
 package product
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"testing"
@@ -137,12 +138,52 @@ func TestProductStatus(t *testing.T) {
 	})
 }
 
-func TestNewProduct(t *testing.T) {
-	t.Run("valid input/should create draft product", func(t *testing.T) {
-		tags := []string{"sale", "new"}
-		p, err := NewProduct("My Phone", "Great phone", CatId(10), false, tags)
+func TestShopIdContext(t *testing.T) {
+	t.Run("WithShopId and ShopIdFromContext/valid", func(t *testing.T) {
+		ctx := WithShopId(context.Background(), ShopId("shop_abc"))
+		shopId, err := ShopIdFromContext(ctx)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
+		}
+		if shopId != ShopId("shop_abc") {
+			t.Errorf("expected shop_abc, got %s", shopId)
+		}
+	})
+
+	t.Run("ShopIdFromContext/missing in context", func(t *testing.T) {
+		_, err := ShopIdFromContext(context.Background())
+		if !errors.Is(err, ErrMissingShopId) {
+			t.Errorf("expected ErrMissingShopId, got %v", err)
+		}
+	})
+
+	t.Run("ShopIdFromContext/empty shopId", func(t *testing.T) {
+		ctx := WithShopId(context.Background(), ShopId("   "))
+		_, err := ShopIdFromContext(ctx)
+		if !errors.Is(err, ErrMissingShopId) {
+			t.Errorf("expected ErrMissingShopId, got %v", err)
+		}
+	})
+
+	t.Run("ShopIdFromContext/nil context", func(t *testing.T) {
+		_, err := ShopIdFromContext(nil)
+		if !errors.Is(err, ErrMissingShopId) {
+			t.Errorf("expected ErrMissingShopId, got %v", err)
+		}
+	})
+}
+
+func TestNewProduct(t *testing.T) {
+	const validShopId = ShopId("shop_test_1")
+
+	t.Run("valid input with shopId/should create draft product", func(t *testing.T) {
+		tags := []string{"sale", "new"}
+		p, err := NewProduct(validShopId, "My Phone", "Great phone", CatId(10), false, tags)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if p.ShopId() != validShopId {
+			t.Errorf("expected shopId %s, got %s", validShopId, p.ShopId())
 		}
 		if p.Status() != StatusDraft {
 			t.Errorf("expected status %s, got %s", StatusDraft, p.Status())
@@ -170,8 +211,26 @@ func TestNewProduct(t *testing.T) {
 		}
 	})
 
+	t.Run("empty shopId/should return ErrMissingShopId", func(t *testing.T) {
+		p, err := NewProduct("", "Phone", "desc", CatId(1), false, nil)
+		if !errors.Is(err, ErrMissingShopId) {
+			t.Errorf("expected ErrMissingShopId, got %v", err)
+		}
+		if p != nil {
+			t.Errorf("expected nil product, got %v", p)
+		}
+
+		p2, err2 := NewProduct("   ", "Phone", "desc", CatId(1), false, nil)
+		if !errors.Is(err2, ErrMissingShopId) {
+			t.Errorf("expected ErrMissingShopId for whitespace shopId, got %v", err2)
+		}
+		if p2 != nil {
+			t.Errorf("expected nil product, got %v", p2)
+		}
+	})
+
 	t.Run("empty title/should return error", func(t *testing.T) {
-		p, err := NewProduct("", "desc", CatId(1), false, nil)
+		p, err := NewProduct(validShopId, "", "desc", CatId(1), false, nil)
 		if err == nil {
 			t.Error("expected error for empty title, got nil")
 		}
@@ -179,7 +238,7 @@ func TestNewProduct(t *testing.T) {
 			t.Errorf("expected nil product, got %v", p)
 		}
 
-		p2, err2 := NewProduct("   ", "desc", CatId(1), false, nil)
+		p2, err2 := NewProduct(validShopId, "   ", "desc", CatId(1), false, nil)
 		if err2 == nil {
 			t.Error("expected error for whitespace title, got nil")
 		}
@@ -190,8 +249,10 @@ func TestNewProduct(t *testing.T) {
 }
 
 func TestProduct_Publish(t *testing.T) {
+	const validShopId = ShopId("shop_test_1")
+
 	t.Run("draft product/should transition to active", func(t *testing.T) {
-		p, err := NewProduct("Title", "Desc", CatId(1), false, nil)
+		p, err := NewProduct(validShopId, "Title", "Desc", CatId(1), false, nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -205,7 +266,7 @@ func TestProduct_Publish(t *testing.T) {
 	})
 
 	t.Run("active product/should return ErrInvalidTransition", func(t *testing.T) {
-		p, _ := NewProduct("Title", "Desc", CatId(1), false, nil)
+		p, _ := NewProduct(validShopId, "Title", "Desc", CatId(1), false, nil)
 		_ = p.Publish()
 		err := p.Publish()
 		if !errors.Is(err, ErrInvalidTransition) {
@@ -214,7 +275,7 @@ func TestProduct_Publish(t *testing.T) {
 	})
 
 	t.Run("archived product/should return ErrInvalidTransition", func(t *testing.T) {
-		p, _ := NewProduct("Title", "Desc", CatId(1), false, nil)
+		p, _ := NewProduct(validShopId, "Title", "Desc", CatId(1), false, nil)
 		_ = p.Publish()
 		_ = p.Archive()
 		err := p.Publish()
@@ -225,8 +286,10 @@ func TestProduct_Publish(t *testing.T) {
 }
 
 func TestProduct_Archive(t *testing.T) {
+	const validShopId = ShopId("shop_test_1")
+
 	t.Run("active product/should transition to archived", func(t *testing.T) {
-		p, _ := NewProduct("Title", "Desc", CatId(1), false, nil)
+		p, _ := NewProduct(validShopId, "Title", "Desc", CatId(1), false, nil)
 		_ = p.Publish()
 		err := p.Archive()
 		if err != nil {
@@ -238,7 +301,7 @@ func TestProduct_Archive(t *testing.T) {
 	})
 
 	t.Run("draft product/should return ErrInvalidTransition", func(t *testing.T) {
-		p, _ := NewProduct("Title", "Desc", CatId(1), false, nil)
+		p, _ := NewProduct(validShopId, "Title", "Desc", CatId(1), false, nil)
 		err := p.Archive()
 		if !errors.Is(err, ErrInvalidTransition) {
 			t.Errorf("expected ErrInvalidTransition, got %v", err)
@@ -247,8 +310,10 @@ func TestProduct_Archive(t *testing.T) {
 }
 
 func TestProduct_Update(t *testing.T) {
+	const validShopId = ShopId("shop_test_1")
+
 	t.Run("update title/should set title and refresh updatedAt", func(t *testing.T) {
-		p, _ := NewProduct("Old Title", "Desc", CatId(1), false, nil)
+		p, _ := NewProduct(validShopId, "Old Title", "Desc", CatId(1), false, nil)
 		oldUpdatedAt := p.UpdatedAt()
 		time.Sleep(10 * time.Millisecond)
 
@@ -264,7 +329,7 @@ func TestProduct_Update(t *testing.T) {
 	})
 
 	t.Run("nil fields/should not change", func(t *testing.T) {
-		p, _ := NewProduct("Title", "Desc", CatId(1), false, []string{"tag1"})
+		p, _ := NewProduct(validShopId, "Title", "Desc", CatId(1), false, []string{"tag1"})
 		oldUpdatedAt := p.UpdatedAt()
 
 		p.Update(UpdateProductCmd{})
@@ -285,8 +350,10 @@ func TestProduct_Update(t *testing.T) {
 }
 
 func TestProduct_SetSlug(t *testing.T) {
+	const validShopId = ShopId("shop_test_1")
+
 	t.Run("should set slug", func(t *testing.T) {
-		p, _ := NewProduct("Title", "Desc", CatId(1), false, nil)
+		p, _ := NewProduct(validShopId, "Title", "Desc", CatId(1), false, nil)
 		p.SetSlug("my-slug")
 		if p.Slug() != "my-slug" {
 			t.Errorf("expected slug 'my-slug', got %s", p.Slug())
@@ -412,10 +479,15 @@ func TestProductVariant_SetPrice(t *testing.T) {
 }
 
 func TestNewCategory(t *testing.T) {
-	t.Run("valid input/should create category", func(t *testing.T) {
-		c, err := NewCategory("Electronics", "electronics", "", nil)
+	const validShopId = ShopId("shop_test_1")
+
+	t.Run("valid input with shopId/should create category", func(t *testing.T) {
+		c, err := NewCategory(validShopId, "Electronics", "electronics", "", nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
+		}
+		if c.ShopId() != validShopId {
+			t.Errorf("expected shopId %s, got %s", validShopId, c.ShopId())
 		}
 		if c.Name() != "Electronics" {
 			t.Errorf("expected name 'Electronics', got %s", c.Name())
@@ -436,9 +508,12 @@ func TestNewCategory(t *testing.T) {
 
 	t.Run("child category/should compute depth from parent path", func(t *testing.T) {
 		parentId := CatId(5)
-		c, err := NewCategory("Phones", "phones", "1.2", &parentId)
+		c, err := NewCategory(validShopId, "Phones", "phones", "1.2", &parentId)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
+		}
+		if c.ShopId() != validShopId {
+			t.Errorf("expected shopId %s, got %s", validShopId, c.ShopId())
 		}
 		if c.Depth() != 2 {
 			t.Errorf("expected depth 2 for parentPath '1.2', got %d", c.Depth())
@@ -448,12 +523,23 @@ func TestNewCategory(t *testing.T) {
 		}
 	})
 
+	t.Run("empty shopId/should return ErrMissingShopId", func(t *testing.T) {
+		_, err := NewCategory("", "Electronics", "electronics", "", nil)
+		if !errors.Is(err, ErrMissingShopId) {
+			t.Errorf("expected ErrMissingShopId for empty shopId, got %v", err)
+		}
+		_, err2 := NewCategory("   ", "Electronics", "electronics", "", nil)
+		if !errors.Is(err2, ErrMissingShopId) {
+			t.Errorf("expected ErrMissingShopId for whitespace shopId, got %v", err2)
+		}
+	})
+
 	t.Run("empty name/should return error", func(t *testing.T) {
-		_, err := NewCategory("", "slug", "", nil)
+		_, err := NewCategory(validShopId, "", "slug", "", nil)
 		if err == nil {
 			t.Error("expected error for empty name, got nil")
 		}
-		_, err2 := NewCategory("   ", "slug", "", nil)
+		_, err2 := NewCategory(validShopId, "   ", "slug", "", nil)
 		if err2 == nil {
 			t.Error("expected error for whitespace name, got nil")
 		}
@@ -461,8 +547,10 @@ func TestNewCategory(t *testing.T) {
 }
 
 func TestCategory_SetPath(t *testing.T) {
+	const validShopId = ShopId("shop_test_1")
+
 	t.Run("should set path", func(t *testing.T) {
-		c, _ := NewCategory("Name", "slug", "", nil)
+		c, _ := NewCategory(validShopId, "Name", "slug", "", nil)
 		c.SetPath("1.2.3")
 		if c.Path() != "1.2.3" {
 			t.Errorf("expected path '1.2.3', got %s", c.Path())
@@ -471,8 +559,10 @@ func TestCategory_SetPath(t *testing.T) {
 }
 
 func TestCategory_SetSortOrder(t *testing.T) {
+	const validShopId = ShopId("shop_test_1")
+
 	t.Run("should set sort order", func(t *testing.T) {
-		c, _ := NewCategory("Name", "slug", "", nil)
+		c, _ := NewCategory(validShopId, "Name", "slug", "", nil)
 		c.SetSortOrder(5)
 		if c.SortOrder() != 5 {
 			t.Errorf("expected sortOrder 5, got %d", c.SortOrder())

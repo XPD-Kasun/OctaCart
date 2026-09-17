@@ -11,6 +11,10 @@ type UserId int
 
 type Money int64
 
+// ShopId represents the opaque identifier of a store tenant.
+// Extracted from merchant JWT claims and threaded across all store-scoped BCs.
+type ShopId string
+
 type KV[Key comparable, Val any] struct {
 	Key Key
 	Val Val
